@@ -1,0 +1,2424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Horizon">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0d12">
+<meta name="description" content="Map terrain horizons, photos, GPX tracks, and viewpoints entirely in your browser.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%230a0d12' stroke='%2338bdf8' stroke-width='6'/%3E%3Cpath d='M50 14 L62 56 L50 48 L38 56 Z' fill='%23f87171'/%3E%3C/svg%3E">
+<title>Horizon Mapper</title>
+<style>
+  :root{
+    --bg:#0a0d12; --card:#141a22; --card2:#1b2330; --line:#26303d;
+    --fg:#e8eef6; --dim:#8b9bb0; --accent:#38bdf8; --warn:#fbbf24;
+    --bad:#f87171; --good:#4ade80; --sky:#1d5c96; --ground:#6b4a2a;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--fg);
+    font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
+    -webkit-user-select:none;user-select:none;overscroll-behavior-y:contain}
+  body{padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 10px)
+       calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 10px);
+    margin:0 auto}
+
+  header{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  h1{font-size:15px;font-weight:650;letter-spacing:.02em;margin:0;flex:1}
+  .pill{font:600 11px/1 var(--mono);letter-spacing:.04em;padding:5px 8px;border-radius:999px;
+    background:var(--card2);color:var(--dim);border:1px solid var(--line);white-space:nowrap}
+  .pill.ok{color:var(--good);border-color:#1e4d33}
+  .pill.warn{color:var(--warn);border-color:#4d3d14}
+  .pill.bad{color:var(--bad);border-color:#4d2020}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+    padding:14px;margin-bottom:10px}
+  .card h2{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+    color:var(--dim);margin:0 0 10px}
+  .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+
+  .big{font:700 clamp(38px,13vw,56px)/1 var(--mono);font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em}
+  .unit{font-size:.45em;font-weight:600;color:var(--dim);margin-left:2px}
+  .card-label{font:600 11px/1 var(--mono);letter-spacing:.08em;color:var(--dim);
+    text-transform:uppercase;margin-bottom:5px}
+  .val{font:600 17px/1.25 var(--mono);font-variant-numeric:tabular-nums;word-break:break-all}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .sub{font:500 12px/1.3 var(--mono);color:var(--dim)}
+
+
+  button{font:600 14px/1 -apple-system,system-ui,sans-serif;color:var(--fg);
+    background:var(--card2);border:1px solid var(--line);border-radius:10px;
+    padding:11px 14px;cursor:pointer}
+  button:active{background:#232d3d}
+  button:disabled{opacity:.45;cursor:default}
+  button.on{background:var(--accent);border-color:var(--accent);color:#04202e}
+  .btns{display:flex;gap:8px;margin-top:12px}
+  .btns button{flex:1}
+
+  #gate{position:fixed;inset:0;background:rgba(10,13,18,.97);z-index:50;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;padding:28px;text-align:center}
+  #gate p{color:var(--dim);margin:0;max-width:30em;font-size:14px}
+  #gate button{font-size:16px;padding:16px 34px;background:var(--accent);
+    border-color:var(--accent);color:#04202e}
+  #gate.hidden{display:none}
+  .err{color:var(--bad);font:500 13px/1.45 var(--mono);white-space:pre-wrap}
+  .held{opacity:.55}
+  /* ── horizon ─────────────────────────────────────────── */
+  #hz-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;
+    background:#070a0f;border:1px solid var(--line)}
+  #hz{display:block;width:100%;height:250px;touch-action:none}
+  #hz{cursor:grab}
+  #hz.panning{cursor:grabbing}
+  #photo-reference{margin:0 0 10px}
+  #photo-viewport{height:clamp(120px,26dvh,240px);overflow:hidden;touch-action:none;
+    background:#070a0f;border:1px solid var(--line);border-radius:12px;cursor:grab}
+  #photo-viewport:active{cursor:grabbing}
+  #photo-preview{display:block;width:100%;height:100%;object-fit:contain;
+    transform-origin:center;pointer-events:none}
+  #photo-caption{margin-top:6px;overflow-wrap:anywhere}
+  #photo-preview[hidden]{display:none}
+  body.photo-mode #hz{height:clamp(150px,30dvh,250px)}
+  body.full #hz{height:max(200px,calc(100dvh - 340px))}
+  body.full.photo-mode #hz{height:max(150px,calc(65dvh - 260px))}
+  body.full #card-map,
+  body.full #card-pos,body.full #card-location,body.full #foot{display:none}
+  .hz-row{display:flex;gap:7px;margin-top:9px;align-items:center;flex-wrap:wrap}
+  .hz-row > label{font:600 10px/1 var(--mono);letter-spacing:.09em;color:var(--dim);
+    text-transform:uppercase;min-width:3.6em}
+  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:9px 11px;font-size:12px}
+  .seg button + button{border-left:1px solid var(--line)}
+  #hz-status{font:500 12px/1.35 var(--mono);color:var(--dim);margin-top:9px;min-height:1.25em}
+  #hz-status.err{color:var(--bad)}
+  #hz-readout{display:none;margin-top:10px;padding:11px;background:var(--card2);
+    border:1px solid var(--line);border-radius:12px}
+  #hz-readout.on{display:block}
+  .hz-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .hz-grid .val{font-size:15px}
+  #hz-meta{float:right;font:500 10px/1 var(--mono);color:var(--dim);letter-spacing:.04em}
+  /* ── map ─────────────────────────────────────────────── */
+  #mp-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;
+    background:#070a0f;border:1px solid var(--line)}
+  /* Map gestures own the canvas; scroll the page using the surrounding controls. */
+  #mp{display:block;width:100%;aspect-ratio:1;touch-action:none;cursor:grab}
+  #mp-attribution{max-width:100%;padding:3px 5px;text-align:right;
+    background:rgba(10,13,18,.85);font:9px/1.3 -apple-system,system-ui,sans-serif;color:var(--fg)}
+  #mp-attribution a{color:inherit}
+  #mp-meta{float:right;font:500 10px/1 var(--mono);color:var(--dim);letter-spacing:.04em}
+  #view-compass{position:absolute;top:12px;right:12px;z-index:2;width:44px;height:44px;
+    border-radius:50%;pointer-events:none;background:#0a111bd9;border:1px solid #a8bac8;
+    box-shadow:inset 0 0 0 3px #ffffff0d;filter:drop-shadow(0 2px 4px #000b)}
+  #view-compass-arrow{position:absolute;inset:7px 20px;transform-origin:50% 50%}
+  #view-compass-arrow::before{content:"";position:absolute;left:50%;top:5px;bottom:2px;
+    border-left:2px solid #eef5fa;transform:translateX(-50%)}
+  #view-compass-arrow::after{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+    border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #ff6868}
+
+  /* Let available space, including split-screen windows, choose the layout. */
+  .card{min-width:0}
+  button{min-height:44px}
+  .btns{flex-wrap:wrap}
+  .btns button{min-width:0}
+  .sub{overflow-wrap:anywhere}
+  button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+  #gate{overflow-y:auto;justify-content:safe center;
+    padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right))
+      max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
+  #gate > *{flex-shrink:0}
+
+  @media (min-width:700px){
+    body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+      grid-template-areas:"header header" "location location" "horizon horizon"
+        "map position" "foot foot" "diagnostics diagnostics";
+      gap:14px;padding:calc(env(safe-area-inset-top) + 16px)
+        calc(env(safe-area-inset-right) + 18px) calc(env(safe-area-inset-bottom) + 20px)
+        calc(env(safe-area-inset-left) + 18px);align-items:start}
+    header{grid-area:header;margin:0}
+    .card{margin:0;padding:18px}
+    #card-location{grid-area:location}
+    #card-horizon{grid-area:horizon}
+    #card-map{grid-area:map}
+    #card-pos{grid-area:position}
+    #foot{grid-area:foot}
+    #diagnostics{grid-area:diagnostics;margin:0;justify-content:center}
+    #diagnostics button{flex:0 1 320px}
+    #hz{height:clamp(280px,34dvh,460px)}
+    body.photo-mode #hz{height:clamp(220px,28dvh,380px)}
+    #photo-viewport{height:clamp(220px,30dvh,420px)}
+    body.full{grid-template-areas:"header header" "horizon horizon";
+      grid-template-rows:auto 1fr}
+    body.full #diagnostics{display:none}
+    body.full.photo-mode #hz{height:max(220px,calc(60dvh - 280px))}
+  }
+  @media (min-width:700px) and (orientation:portrait){
+    body{grid-template-areas:"header header" "location location" "horizon horizon"
+      "map map" "position position" "foot foot" "diagnostics diagnostics"}
+  }
+  @media (min-width:700px) and (orientation:landscape){
+    body{grid-template-columns:repeat(2,minmax(0,1fr));
+      grid-template-rows:auto auto max-content minmax(0,1fr) auto auto;
+      grid-template-areas:"header header" "location location" "horizon map"
+        "horizon position" "foot foot" "diagnostics diagnostics"}
+    #hz{height:clamp(300px,44dvh,620px)}
+  }
+  @media (max-height:500px) and (orientation:landscape){
+    #hz{height:clamp(180px,55dvh,260px)}
+    #photo-viewport{height:180px}
+  }
+  @media (min-width:700px) and (max-height:500px) and (orientation:landscape){
+    /* Keep the same source-first order with compact spacing on landscape phones. */
+    body{gap:10px;padding-top:calc(env(safe-area-inset-top) + 8px);
+      grid-template-rows:auto auto max-content minmax(0,1fr) auto auto;
+      grid-template-areas:"header header" "location location" "horizon map"
+        "horizon position" "foot foot" "diagnostics diagnostics"}
+    .card{padding:12px}
+    body:not(.full).photo-mode #hz{height:clamp(180px,55dvh,260px)}
+  }
+  @media (max-width:359px){
+    .card{padding:10px}
+    .hz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .seg button{padding-inline:9px}
+  }
+  #card-location{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;
+    padding:8px 12px;border-radius:12px}
+  #card-location .btns{margin:0;flex-shrink:0;gap:6px}
+  #card-location .btns button{flex:none;padding-inline:12px}
+  #location-source{flex:1 1 180px;min-width:0}
+  #source-help{font-size:12px;color:var(--dim)}
+  #source-help summary{cursor:pointer;min-height:44px;align-content:center}
+  #source-help[open]{flex-basis:100%}
+  #source-help p{margin:0 0 6px;max-width:85ch}
+  #photo-status{flex-basis:100%}
+  #photo-status:empty{display:none}
+  #mp3d{display:block;width:100%;aspect-ratio:1;touch-action:none;cursor:grab}
+  #mp3d:active{cursor:grabbing}
+  #mp3d:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
+  [hidden]{display:none!important}
+  #terrain-empty{position:absolute;inset:0 0 24px;display:grid;place-items:center;
+    padding:24px;text-align:center;pointer-events:none}
+  #map-view-row{margin:0 0 10px}
+  body.game-mode{overflow:hidden}
+  body.game-mode #card-map{position:fixed;inset:0;z-index:100;margin:0;padding:0;border:0;border-radius:0;background:#070a0f}
+  body.game-mode #card-map > :not(#mp-wrap):not(#game-controls){display:none!important}
+  body.game-mode #mp-wrap{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0}
+  body.game-mode #mp3d{width:100%;height:100%;aspect-ratio:auto}
+  body.game-mode #view-compass{top:auto;right:18px;bottom:max(204px,calc(env(safe-area-inset-bottom) + 204px));z-index:3}
+  #game-controls{position:absolute;inset:0;pointer-events:none;color:white;z-index:2}
+  #game-controls button{pointer-events:auto;touch-action:none;background:#142331e8;border:1px solid #557083;color:white}
+  .game-header{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+  .game-top{display:flex;gap:8px;flex-wrap:wrap;width:100%}
+  .game-speed{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#163346;border-radius:10px;pointer-events:auto}.game-speed select{font:inherit;color:inherit;background:#163346;border:1px solid #668497;border-radius:5px;padding:4px}
+  #game-status{max-width:100%;box-sizing:border-box;text-shadow:0 1px 3px #000;font:12px var(--mono);background:#0a0d12b8;padding:8px;border-radius:6px}
+  .game-help{margin:0;font-size:12px;text-shadow:0 1px 3px #000}
+  .game-stick{position:absolute;bottom:max(42px,env(safe-area-inset-bottom));left:18px;width:144px;height:144px;border-radius:50%;border:1px solid #7892a5;background:radial-gradient(circle,#28465b99,#142331cc);pointer-events:auto;touch-action:none;user-select:none;display:grid;place-items:center;box-shadow:inset 0 0 0 24px #ffffff08}
+  .game-stick-thumb{width:56px;height:56px;border-radius:50%;background:#d2e5f3cc;border:2px solid #edf7ff;box-shadow:0 3px 12px #0008;pointer-events:none}
+  .game-actions{position:absolute;right:18px;bottom:max(42px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
+  #project-panel input:not([type="checkbox"]):not([type="color"]),#project-panel select{background:#111d2a;color:var(--fg);border:1px solid #34465b;border-radius:8px;padding:8px;max-width:100%}
+  #project-panel input[type="color"]{border:0;padding:2px;background:transparent;flex-shrink:0}
+  @media(max-width:600px){.game-help{font-size:10px;max-width:280px}.game-top button{font-size:12px;padding:8px}.game-top{gap:5px;display:grid;grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Horizon Mapper</h1>
+  <span class="pill" id="pill-motion">SENSORS</span>
+  <span class="pill" id="pill-gps">GPS</span>
+</header>
+
+<section class="card" id="card-location" aria-label="Location source">
+  <div class="btns">
+    <button id="photo-pick">Upload photo</button>
+    <button id="use-gps" class="on">Use device GPS</button>
+  </div>
+  <input id="photo-file" type="file" multiple accept="image/jpeg,image/heic,image/heif,image/tiff,image/png,.jpg,.jpeg,.heic,.heif,.tif,.tiff,.png" hidden>
+  <div class="sub" id="location-source">Using device GPS.</div>
+  <details id="source-help">
+    <summary>Photo help</summary>
+    <p class="sub">Choose an original JPEG, HEIC, TIFF, or PNG with GPS metadata to map its horizon. The photo stays on this device. Terrain tiles are fetched directly from AWS Open Data, imagery from Esri, and nearby peak names from OpenStreetMap.</p>
+  </details>
+  <div class="err" id="photo-status" role="status" aria-live="polite"></div>
+</section>
+
+<!-- ── HORIZON ───────────────────────────────────────── -->
+<div class="card" id="card-horizon">
+  <h2>Horizon <span id="hz-meta"></span></h2>
+  <figure id="photo-reference" hidden>
+    <div id="photo-viewport">
+      <img id="photo-preview" alt="Uploaded photo for comparison with the horizon" draggable="false">
+    </div>
+    <figcaption class="sub" id="photo-caption"></figcaption>
+    <div class="sub" id="photo-preview-status" role="status"></div>
+  </figure>
+  <div id="hz-wrap"><canvas id="hz"></canvas></div>
+  <div class="sub" id="pan-hint" style="margin-top:9px">Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
+  <div id="hz-status">Waiting for a GPS fix…</div>
+
+  <details id="peak-panel" style="margin:10px 0">
+    <summary>Named peaks <span id="peak-count" class="sub"></span></summary>
+    <p id="peak-status" class="sub" role="status">Map the horizon to find named peaks.</p>
+    <button id="peak-retry" hidden>Retry peak names</button>
+    <div id="peak-list" style="display:flex;flex-wrap:wrap;gap:7px;max-height:180px;overflow:auto"></div>
+    <p class="sub">Names matched to visible terrain, approximately. Coverage varies.
+      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:var(--accent)">OpenStreetMap contributors</a></p>
+  </details>
+  <div id="hz-readout">
+    <div id="r-peak" style="font-weight:650;margin-bottom:9px" hidden></div>
+    <div class="hz-grid">
+      <div><div class="card-label">Bearing</div><div class="val" id="r-az">--</div></div>
+      <div><div class="card-label">Elev ang</div><div class="val" id="r-el">--</div></div>
+      <div><div class="card-label">Distance</div><div class="val" id="r-d">--</div></div>
+      <div><div class="card-label">Altitude</div><div class="val" id="r-h">--</div></div>
+    </div>
+    <div class="sub" id="r-ll" style="margin-top:9px">--</div>
+    <div class="btns">
+      <button id="r-maps">Open in Maps</button>
+      <button id="r-copy">Copy</button>
+      <button id="r-clear">Clear</button>
+    </div>
+  </div>
+
+  <div class="hz-row" id="hz-actions">
+    <button id="hz-go" style="flex:1">Map the horizon</button>
+  </div>
+  <div class="hz-row">
+    <label>Range</label>
+    <div class="seg" id="hz-range">
+      <button data-r="24140.16">15</button><button data-r="48280.32" class="on">30</button
+      ><button data-r="96560.64">60</button><button data-r="193121.28">120&#8239;mi</button>
+    </div>
+  </div>
+  <div class="hz-row">
+    <label>View</label>
+    <div class="seg" id="hz-fov">
+      <button data-f="30">30°</button><button data-f="60" class="on">60°</button
+      ><button data-f="120">120°</button><button data-f="360">360°</button>
+    </div>
+    <div class="seg" id="hz-mode">
+      <button data-m="chart" class="on">Chart</button><button data-m="true">True</button>
+    </div>
+  </div>
+  <div class="hz-row">
+    <label id="hz-bearing-label">Correction</label>
+    <span class="sub" id="hz-nudge">+0.0°</span>
+    <span class="sub" id="hz-center">Viewing 0.0°</span>
+    <button id="hz-nudge-reset">Reset</button>
+  </div>
+</div>
+
+<!-- ── MAP ───────────────────────────────────────────── -->
+<div class="card" id="card-map">
+  <h2>Map <span id="mp-meta"></span></h2>
+  <div class="hz-row" id="map-view-row">
+    <div class="seg" id="map-view" aria-label="Map view">
+      <button data-v="2d" class="on" aria-pressed="true">2D</button><button data-v="3d" aria-pressed="false">3D</button>
+      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Load a photo and its terrain to use its viewpoint">Perspective</button>
+      <button data-v="game" id="map-game" aria-pressed="false" disabled>Game</button>
+    </div>
+    <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
+  </div>
+  <div id="mp-wrap"><canvas id="mp"></canvas>
+    <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
+    <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
+    <div id="terrain-empty" class="sub" hidden></div>
+    <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
+  </div>
+  <div class="hz-row">
+    <span class="sub" id="sat-status" role="status" aria-live="polite"></span>
+    <button id="sat-retry" hidden>Retry imagery</button>
+  </div>
+  <div id="game-controls" hidden>
+    <div class="game-header">
+    <div class="game-top"><button id="game-exit">Exit game</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-target">Place laser target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
+    <div id="game-status" role="status"></div>
+    <p class="game-help">WASD / arrows: run · Shift: sprint · Drag: aim laser / look · E / Q: up / down · Esc: exit</p>
+    </div>
+    <div id="game-stick" class="game-stick" role="group" aria-label="Movement stick. Drag to move; farther from center moves faster. Keyboard: WASD or arrow keys."><span class="game-stick-thumb"></span></div>
+    <div class="game-actions"><button data-game-key="shift">Sprint</button><button data-game-key="e" aria-label="Fly up">Ascend</button><button data-game-key="q" aria-label="Fly down">Descend</button></div>
+  </div>
+  <div class="hz-row" id="map-zoom-row">
+    <label>Zoom</label>
+    <div class="seg" id="mp-zoom">
+      <button data-k="0" class="on">Fit</button><button data-k="1">1&#215;</button
+      ><button data-k="2">2&#215;</button><button data-k="4">4&#215;</button>
+    </div>
+  </div>
+  <div id="terrain-controls" hidden>
+    <div class="hz-row" id="photo-observer-row" hidden>
+      <label>Observer</label><div class="seg" id="photo-observer" aria-label="Observer height">
+        <button data-height="ground" class="on" aria-pressed="true">Ground</button>
+        <button data-height="photo" aria-pressed="false">Photo altitude</button>
+        <button data-height="custom" aria-pressed="false">Custom</button>
+      </div>
+    </div>
+    <form class="hz-row" id="custom-height-row" hidden>
+      <label for="custom-height">Height above ground (m)</label>
+      <input id="custom-height" type="number" min="1.6" max="5000" step="0.1" value="30" required
+        style="width:90px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit">
+      <button type="submit">Apply</button>
+    </form>
+    <div class="hz-row">
+      <label>Detail</label><div class="seg" id="terrain-detail" aria-label="Terrain detail">
+        <button data-d="low">Low</button><button data-d="medium">Medium</button><button data-d="high" class="on">High</button>
+      </div>
+    </div>
+    <div class="hz-row">
+      <button id="terrain-reset">Reset view</button>
+      <button id="terrain-reload" hidden>Reload terrain</button>
+    </div>
+    <p class="sub" id="terrain-status" role="status"></p>
+  </div>
+</div>
+
+<!-- ── POSITION ──────────────────────────────────────── -->
+<div class="card" id="card-pos">
+  <h2>Position</h2>
+  <div class="grid2">
+    <div>
+      <div class="card-label">Latitude</div>
+      <div class="val" id="v-lat">--</div>
+    </div>
+    <div>
+      <div class="card-label">Longitude</div>
+      <div class="val" id="v-lon">--</div>
+    </div>
+  </div>
+  <div class="sub" id="v-dms" style="margin-top:8px">&nbsp;</div>
+  <div class="grid3" style="margin-top:14px;grid-template-columns:repeat(auto-fit,minmax(90px,1fr))">
+    <div id="pos-accuracy">
+      <div class="card-label">± Accuracy</div>
+      <div class="val" id="v-acc" style="font-size:16px">--</div>
+    </div>
+    <div>
+      <div class="card-label" id="pos-altitude-label">Altitude</div>
+      <div class="val" id="v-alt" style="font-size:16px">--</div>
+    </div>
+    <div id="pos-speed">
+      <div class="card-label">Speed</div>
+      <div class="val" id="v-spd" style="font-size:16px">--</div>
+    </div>
+  </div>
+  <div class="btns">
+    <button id="btn-copy">Copy</button>
+    <button id="btn-maps">Maps</button>
+    <button id="btn-hold">Hold</button>
+  </div>
+  <div class="hz-row">
+    <label>Open in</label>
+    <div class="seg" id="map-app">
+      <button data-a="apple" class="on">Apple</button><button data-a="google">Google</button
+      ><button data-a="gaia">Gaia</button>
+    </div>
+  </div>
+  <div class="sub err" id="pos-err" style="margin-top:10px"></div>
+</div>
+
+<div class="sub" style="text-align:center;padding:4px 0 10px" id="foot"></div>
+<div class="btns" id="diagnostics"><button id="debug-download">Download diagnostics</button></div>
+<div class="sub" style="text-align:center;padding:12px"><a href="./privacy.html" style="color:var(--accent)">Privacy</a></div>
+
+<!-- ── PERMISSION GATE ───────────────────────────────── -->
+<div id="gate">
+  <h1 style="font-size:22px;flex:none">Horizon Mapper</h1>
+  <p id="gate-msg">iOS requires a tap before it will hand over the
+     magnetometer, gyroscope, and GPS. You can also map a photo without enabling sensors.</p>
+  <button id="gate-btn">Enable sensors</button>
+  <button id="gate-photo">Use a photo instead</button>
+  <div class="err" id="gate-err"></div>
+</div>
+
+<script src="./log-sanitize.js"></script>
+<script src="./diagnostics.js"></script>
+<script src="./vendor/exifr-7.1.3.js"></script>
+<script src="./photo-location.js"></script>
+<script src="./satellite-map.js"></script>
+<script src="./terrain-game.js"></script>
+<script src="./terrain-view.js"></script>
+<script src="./photo-viewer.js"></script>
+<script src="./named-peaks.js"></script>
+<script src="./browser-profile.js"></script>
+<script>
+"use strict";
+const DEG = 180 / Math.PI, RAD = Math.PI / 180;
+const METERS_PER_MILE = 1609.344;
+const miles = meters => meters / METERS_PER_MILE;
+const mileLabel = meters => `${Number(miles(meters).toFixed(2))} mi`;
+const $ = id => document.getElementById(id);
+$("debug-download").onclick = () => appDiagnostics.download();
+const photoViewer = new PhotoViewer($("photo-viewport"), $("photo-preview"));
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const norm360 = d => ((d % 360) + 360) % 360;
+// Shared profile-axis labels, independent of any compass instrument panel.
+const CARDINALS = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+                   "S","SSW","SW","WSW","W","WNW","NW","NNW"];
+
+const S = {
+  heading: null, headingSrc: null, compassAcc: null,
+  pitch: 0, roll: 0, aim: 0, haveTilt: false,
+  pos: null, posErr: null, hold: false, locationSource: "gps", photoName: "",
+};
+
+/* ─── smoothing ──────────────────────────────────────── */
+let hx = 0, hy = 0, hInit = false;
+function smoothHeading(deg) {
+  const r = deg * RAD, k = 0.22;
+  if (!hInit) { hx = Math.cos(r); hy = Math.sin(r); hInit = true; }
+  else { hx += k * (Math.cos(r) - hx); hy += k * (Math.sin(r) - hy); }
+  return norm360(Math.atan2(hy, hx) * DEG);
+}
+const ema = (prev, next, k) => prev == null ? next : prev + k * (next - prev);
+
+/* ─── orientation → screen-frame pitch / roll ────────── */
+function screenAngle() {
+  const so = screen.orientation;
+  if (so && typeof so.angle === "number") return so.angle;
+  return typeof window.orientation === "number" ? window.orientation : 0;
+}
+
+function onOrientation(e) {
+  if (S.hold) return;
+
+  // --- heading ---
+  if (typeof e.webkitCompassHeading === "number" && !isNaN(e.webkitCompassHeading)) {
+    S.heading = smoothHeading(norm360(e.webkitCompassHeading + screenAngle()));
+    S.headingSrc = "magnetometer (true north)";
+    S.compassAcc = typeof e.webkitCompassAccuracy === "number"
+      ? e.webkitCompassAccuracy : null;
+  } else if (e.absolute && typeof e.alpha === "number") {
+    S.heading = smoothHeading(norm360(360 - e.alpha + screenAngle()));
+    S.headingSrc = "absolute orientation";
+    S.compassAcc = null;
+  }
+
+  // --- tilt: rotate device axes into world frame, read their Z components ---
+  if (e.beta == null || e.gamma == null) return;
+  const b = e.beta * RAD, g = e.gamma * RAD, o = screenAngle() * RAD;
+  const cB = Math.cos(b), sB = Math.sin(b);
+  const cG = Math.cos(g), sG = Math.sin(g);
+  const devX_z = -cB * sG;   // world-Z component of device +X (right edge)
+  const devY_z =  sB;        // world-Z component of device +Y (top edge)
+  const devZ_z =  cB * cG;   // world-Z component of device +Z (out of screen)
+  const co = Math.cos(o), so_ = Math.sin(o);
+  const scrX_z =  co * devX_z - so_ * devY_z;
+  const scrY_z =  so_ * devX_z + co * devY_z;
+
+  S.pitch = ema(S.pitch, Math.asin(clamp(scrY_z, -1, 1)) * DEG, 0.25);
+  S.roll  = ema(S.roll,  Math.asin(clamp(scrX_z, -1, 1)) * DEG, 0.25);
+  S.aim   = ema(S.aim,   Math.asin(clamp(-devZ_z, -1, 1)) * DEG, 0.25);
+  S.haveTilt = true;
+}
+
+/* ─── geolocation ────────────────────────────────────── */
+let watchId = null;
+function startGeo() {
+  if (S.locationSource !== "gps") return;
+  if (!navigator.geolocation) { S.posErr = "Geolocation unsupported"; return; }
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(
+    p => { if (S.locationSource === "gps" && !S.hold) { S.pos = p; S.posErr = null; } },
+    err => { if (S.locationSource !== "gps") return; S.posErr = err.code === 1
+        ? "Location denied. Settings › Safari › Location → Allow,\nthen reload."
+        : `Location error: ${err.message}`; },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }
+  );
+}
+
+/* ─── formatting ─────────────────────────────────────── */
+const toDMS = (v, pos, neg) => {
+  const h = v >= 0 ? pos : neg, a = Math.abs(v);
+  const d = Math.floor(a), m = Math.floor((a - d) * 60);
+  const s = ((a - d - m / 60) * 3600).toFixed(1);
+  return `${d}°${String(m).padStart(2,"0")}'${String(s).padStart(4,"0")}"${h}`;
+};
+
+/* ─── render ─────────────────────────────────────────── */
+let lastText = 0;
+function render(ts) {
+  requestAnimationFrame(render);
+  if (mapView === "game" && terrainView?.game?.active) { terrainView.game.tick(ts);MP.dirty=true; }
+
+  // The map redraws at 10 Hz with the text, not every frame: the heading wedge
+  // is the only thing on it that moves continuously, and 10 Hz is
+  // indistinguishable there. A tap or a zoom press sets MP.dirty so it lands on
+  // the very next frame instead of waiting out the throttle.
+  let drewMap = false;
+  if (MP.dirty) { MP.dirty = false; drawMap(); drewMap = true; }
+
+  drawHorizon();
+
+  if (ts - lastText < 100) return;
+  lastText = ts;
+  if (!drewMap) drawMap();
+
+  // position
+  const p = S.pos;
+  const photoPosition = S.locationSource === "photo";
+  $("pos-accuracy").hidden = photoPosition && p?.coords.accuracy == null;
+  $("pos-speed").hidden = photoPosition && p?.coords.speed == null;
+  $("pos-altitude-label").textContent = photoPosition
+    ? (p?.coords.altitude == null ? "Terrain altitude" : "Photo altitude") : "Altitude";
+  if (p) {
+    const c = p.coords;
+    $("v-lat").textContent = c.latitude.toFixed(6) + "°";
+    $("v-lon").textContent = c.longitude.toFixed(6) + "°";
+    $("v-dms").textContent = toDMS(c.latitude, "N", "S") + "   " + toDMS(c.longitude, "E", "W");
+    $("v-acc").textContent = c.accuracy == null ? "--" : "±" + c.accuracy.toFixed(0) + " m";
+    const altitude = c.altitude ?? (photoPosition && Number.isFinite(HZ.P?.ground) ? HZ.P.ground : null);
+    $("v-alt").textContent = altitude == null ? (photoPosition && HZ.loading ? "Loading…" : "--")
+      : altitude.toFixed(0) + " m" + (c.altitudeAccuracy ? ` ±${c.altitudeAccuracy.toFixed(0)}` : "");
+    $("v-spd").textContent = c.speed == null ? "--" : miles(c.speed * 3600).toFixed(1) + " mph";
+    $("foot").textContent = S.locationSource === "photo" ? "Location from photo GPS metadata"
+      : "fix " + new Date(p.timestamp).toLocaleTimeString();
+  } else {
+    for (const id of ["v-lat", "v-lon", "v-dms", "v-acc", "v-alt", "v-spd"]) $(id).textContent = "--";
+    $("foot").textContent = "";
+  }
+  $("pos-err").textContent = S.posErr || "";
+
+  // horizon status
+  $("map-perspective").disabled = !terrainData;
+  $("map-game").disabled = !terrainData || !S.pos;
+  $("photo-observer-row").hidden = false;
+  for (const button of $("photo-observer").querySelectorAll("button")) {
+    const hasAltitude = S.locationSource === "photo" && Number.isFinite(S.pos?.coords.altitude);
+    const active = photoObserverHeight === "custom" ? "custom" : photoObserverHeight === "photo" && hasAltitude ? "photo" : "ground";
+    button.hidden = button.dataset.height === "photo" && S.locationSource !== "photo";
+    button.disabled = button.dataset.height === "photo" && !hasAltitude;
+    button.classList.toggle("on", button.dataset.height === active);
+    button.setAttribute("aria-pressed", String(button.dataset.height === active));
+  }
+  $("custom-height-row").hidden = photoObserverHeight !== "custom";
+  updateReadout();
+  $("hz-nudge").textContent = S.locationSource === "photo"
+    ? HZ.photoBearing.toFixed(1) + "°"
+    : (HZ.nudge >= 0 ? "+" : "\u2212") + Math.abs(HZ.nudge).toFixed(1) + "\u00b0";
+  $("hz-center").textContent = `Viewing ${curCenter().toFixed(1)}°`;
+  $("hz-go").disabled = !S.pos || HZ.loading;
+  $("hz-go").style.opacity = (!S.pos || HZ.loading) ? .45 : 1;
+  $("hz-actions").style.display = S.locationSource === "photo" && !HZ.err ? "none" : "flex";
+  $("hz-go").textContent = HZ.err ? "Retry mapping" : "Map the horizon";
+  if (!HZ.loading && !HZ.err) {
+    if (!S.pos) HZ.status = "Waiting for a GPS fix\u2026";
+    else if (!HZ.P) HZ.status = "Ready \u2014 tap Map the horizon.";
+    else if (movedFar()) HZ.status = "You have moved more than 200 m \u2014 map again.";
+  }
+  $("hz-status").textContent = HZ.status;
+  $("hz-status").className = HZ.err ? "err" : "";
+  $("mp-meta").textContent = mapView === "perspective" ? "Photo viewpoint" : mapView === "3d" ? "3D terrain" : mapView === "game" ? "Game" : HZ.P ? "Satellite" : "";
+  $("hz-meta").textContent = HZ.P
+    ? `${mileLabel(HZ.P.radius)} \u00b7 ${HZ.P.ms.tiles + HZ.P.ms.sweep} ms`
+    : "";
+
+  // status pills
+  const pm = $("pill-motion");
+  pm.textContent = S.haveTilt ? "SENSORS OK" : "NO SENSORS";
+  pm.className = "pill " + (S.haveTilt ? "ok" : "warn");
+  const pg = $("pill-gps");
+  if (S.locationSource === "photo") { pg.textContent = "PHOTO GPS"; pg.className = "pill ok"; }
+  else if (S.posErr) { pg.textContent = "GPS ERR"; pg.className = "pill bad"; }
+  else if (p) {
+    const a = p.coords.accuracy;
+    pg.textContent = "GPS ±" + (a == null ? "?" : a.toFixed(0)) + "m";
+    pg.className = "pill " + (a != null && a <= 20 ? "ok" : "warn");
+  } else { pg.textContent = "GPS…"; pg.className = "pill warn"; }
+}
+requestAnimationFrame(render);
+
+/* ─── horizon ────────────────────────────────────────── */
+const HZ = {
+  P: null, at: null, loading: false, status: "Waiting for a GPS fix…", err: false,
+  fov: 60, mode: "chart", radius: 30 * METERS_PER_MILE,
+  nudge: 0, photoBearing: 0, photoInitialBearing: 0, selAz: null, selLayer: 0,
+  aimLay: 0,         // which layer the crosshair is tracking, for hysteresis
+  pinAim: null,      // aim reading a tap pinned it at, so tapping again steps on
+  vLo: -3, vHi: 6,   // chart-mode vertical window, degrees -- fixed per profile
+  vCenter: 0,        // true-mode vertical centre, follows the phone's tilt
+};
+try { HZ.nudge = +localStorage.getItem("hz.nudge") || 0; } catch {}
+
+const wrap180 = d => ((d % 360) + 540) % 360 - 180;
+
+const cvs = $("hz"), ctx = cvs.getContext("2d");
+let cw = 0, ch = 0, cdpr = 0, sky = null;
+function fitCanvas() {
+  const r = cvs.getBoundingClientRect();
+  const d = Math.min(3, window.devicePixelRatio || 1);
+  if (r.width === cw && r.height === ch && d === cdpr) return;
+  cw = r.width; ch = r.height; cdpr = d;
+  cvs.width = Math.max(1, Math.round(cw * d));
+  cvs.height = Math.max(1, Math.round(ch * d));
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  sky = ctx.createLinearGradient(0, 0, 0, ch);
+  sky.addColorStop(0, "#05080f");
+  sky.addColorStop(0.55, "#0b1524");
+  sky.addColorStop(1, "#22406a");
+}
+
+/* Projection. Gnomonic (rectilinear, what a lens does) up to 120 deg, linear
+   beyond -- gnomonic diverges at 180. Both are exactly invertible, and every
+   touch goes back through the inverse, so the readout can never drift from
+   what is drawn. */
+const wideMode = () => HZ.fov > 120;
+const focal = () => (cw / 2) / Math.tan(HZ.fov / 2 * RAD);
+function deltaAt(x) {           // screen x -> signed degrees off centre
+  return wideMode() ? (x - cw / 2) / cw * HZ.fov
+                    : Math.atan((x - cw / 2) / focal()) * DEG;
+}
+function projX(az, center) {
+  const d = wrap180(az - center);
+  if (wideMode()) return cw / 2 + d / HZ.fov * cw;
+  if (d <= -89.9) return -1e5;
+  if (d >= 89.9) return 1e5;
+  return cw / 2 + focal() * Math.tan(d * RAD);
+}
+const unprojX = (x, center) => norm360(center + deltaAt(x));
+// The vertical focal length is capped at a 120 deg equivalent. Sharing focal()
+// with the horizontal would divide by tan(180 deg) in the 360 deg panorama and
+// blow the vertical scale to infinity.
+const vFocal = () => (cw / 2) / Math.tan(Math.min(HZ.fov, 120) / 2 * RAD);
+function projY(el) {
+  if (HZ.mode === "true")
+    return ch / 2 - vFocal() * Math.tan(clamp(el - HZ.vCenter, -80, 80) * RAD);
+  return ch - (el - HZ.vLo) / (HZ.vHi - HZ.vLo) * ch;
+}
+function unprojY(y) {
+  if (HZ.mode === "true")
+    return HZ.vCenter + Math.atan((ch / 2 - y) / vFocal()) * DEG;
+  return HZ.vLo + (ch - y) / ch * (HZ.vHi - HZ.vLo);
+}
+
+/* Profile lookups. */
+function angAt(az) {
+  const P = HZ.P, N = P.rays, f = norm360(az) / 360 * N;
+  const i = Math.floor(f), t = f - i;
+  const a = P.ang[i % N], b = P.ang[(i + 1) % N];
+  return a + (b - a) * t;
+}
+const binOf = az => Math.round(norm360(az) / 360 * HZ.P.rays) % HZ.P.rays;
+// Max over every bin a screen column covers. Interpolating instead would file
+// the tops off peaks whenever bins are denser than pixels.
+function angSpan(azL, azR) {
+  const P = HZ.P, N = P.rays;
+  let m = Math.max(angAt(azL), angAt(azR));
+  const iL = Math.ceil(azL / 360 * N), iR = Math.floor(azR / 360 * N);
+  for (let i = iL; i <= iR; i++) {
+    const v = P.ang[((i % N) + N) % N];
+    if (v > m) m = v;
+  }
+  return m;
+}
+// Aerial perspective: distant ground washes out toward the sky colour, which is
+// how the eye reads depth in a real landscape.
+const HAZE_N = 24;
+function hazeAt(d, R) {
+  const f = Math.min(1, Math.sqrt(d / R));
+  return `rgb(${18 + f * 104 | 0},${26 + f * 126 | 0},${38 + f * 152 | 0})`;
+}
+const haze = d => hazeAt(d, Math.max(1000, HZ.P.radius));
+const hazeB = d => clamp(Math.floor(
+  Math.sqrt(Math.min(1, d / Math.max(1000, HZ.P.radius))) * HAZE_N), 0, HAZE_N - 1);
+
+/* Layers.
+
+   The skyline arrives in ang/dist/elev/lat/lon/z exactly as it always has --
+   layer 0 -- and every nearer visible ridge rides along ragged in `sub`: n[b] is
+   how many bearing b has, and the value arrays are bearing-major, top-down
+   within a bearing. off[] is the prefix sum into them, built once per profile
+   rather than rescanned per frame. */
+function prepProfile(P) {
+  const off = new Int32Array(P.rays);
+  let p = 0;
+  for (let b = 0; b < P.rays; b++) { off[b] = p; p += P.sub.n[b]; }
+  P.off = off;
+  // Assigning ctx.fillStyle re-parses the colour string, and there is now one
+  // band per layer per column rather than one per column. Precomputing the ramp
+  // and only assigning when the bucket changes keeps that off the hot path.
+  const R = Math.max(1000, P.radius);
+  P.hz = [];
+  for (let i = 0; i < HAZE_N; i++) P.hz.push(hazeAt(R * ((i + 0.5) / HAZE_N) ** 2, R));
+}
+
+const nLay = b => 1 + HZ.P.sub.n[b];
+const layAng = (b, L) => L === 0 ? HZ.P.ang[b]
+  : (L <= HZ.P.sub.n[b] ? HZ.P.sub.ang[HZ.P.off[b] + L - 1] : null);
+const layDist = (b, L) => L === 0 ? HZ.P.dist[b]
+  : (L <= HZ.P.sub.n[b] ? HZ.P.sub.dist[HZ.P.off[b] + L - 1] : 0);
+// The whole record, for the readout and the map marker.
+function layAt(b, L) {
+  const P = HZ.P;
+  if (L === 0) return { ang: P.ang[b], dist: P.dist[b], elev: P.elev[b],
+                        lat: P.lat[b], lon: P.lon[b], z: P.z[b] };
+  const j = P.off[b] + L - 1, S = P.sub;
+  return { ang: S.ang[j], dist: S.dist[j], elev: S.elev[j],
+           lat: S.lat[j], lon: S.lon[j], z: S.z[j] };
+}
+
+// Max over every bin a screen column covers, for one layer -- angSpan's argument
+// applies unchanged: interpolating would file the tops off peaks. Returns
+// -Infinity when no bin in the column carries this layer, and reports the
+// winning bin's distance through `out` so the band can be hazed by the ground
+// that actually forms it rather than by whatever the column's centre bin holds.
+function spanL(azL, azR, L, out) {
+  const P = HZ.P, N = P.rays;
+  let m = -Infinity, md = 0;
+  const iL = Math.ceil(azL / 360 * N), iR = Math.floor(azR / 360 * N);
+  for (let i = iL; i <= iR; i++) {
+    const b = ((i % N) + N) % N, v = layAng(b, L);
+    if (v != null && v > m) { m = v; md = layDist(b, L); }
+  }
+  if (m === -Infinity) {                    // column narrower than one bin
+    const b = binOf((azL + azR) / 2), v = layAng(b, L);
+    if (v != null) { m = v; md = layDist(b, L); }
+  }
+  out[0] = md;
+  return m;
+}
+
+/* Which layer the crosshair is on.
+
+   The horizontal amber line is the phone's own pitch, so sighting along the
+   phone picks the ridge in the second axis the way turning the phone picks it in
+   the first. projY is monotonic in angle in both Chart and True mode, so
+   "nearest in angle to the aim" and "nearest to the amber line on screen" are
+   the same ordering and the picker behaves identically in the two modes. Hold
+   the phone flat and S.aim runs to -90, which clamps the choice to the lowest
+   layer; point it at the sky and it clamps to the skyline.
+
+   Hysteresis, because S.aim is EMA-smoothed and two ridges a few tenths of a
+   degree apart would otherwise trade the ring back and forth while the phone is
+   held still. The margin is PROM-sized on purpose: closer together than a layer
+   is wide, and there is nothing to choose between them anyway. */
+const AIM_HYST = 0.2;
+function aimLayer(b) {
+  const nl = nLay(b);
+  if (!S.haveTilt) return Math.min(HZ.aimLay, nl - 1);
+  // Pinned by a tap that stepped through the stack (see pickAt): hold it until
+  // the phone is actually moved, so a second tap steps on instead of the aim
+  // snapping the ring straight back to where it already was.
+  if (HZ.pinAim != null && Math.abs(S.aim - HZ.pinAim) < AIM_HYST)
+    return Math.min(HZ.aimLay, nl - 1);
+  HZ.pinAim = null;
+  let best = 0, bd = Infinity;
+  for (let L = 0; L < nl; L++) {
+    const d = Math.abs(layAng(b, L) - S.aim);
+    if (d < bd) { bd = d; best = L; }
+  }
+  const cur = HZ.aimLay;
+  if (cur < nl && cur !== best && Math.abs(layAng(b, cur) - S.aim) - bd < AIM_HYST)
+    return cur;
+  HZ.aimLay = best;
+  return best;
+}
+
+const liveViewing = () => S.locationSource === "gps";
+const curCenter = () => liveViewing()
+  ? norm360((S.heading == null ? 0 : S.heading) + HZ.nudge) : HZ.photoBearing;
+
+// The chart-mode vertical window is fixed once, from the whole 360 deg profile,
+// and then left alone. Re-fitting it to whatever happened to be on screen made
+// the skyline breathe and slide vertically as you turned, which wrecks the one
+// thing a horizon profile is for: judging what is in front of you against the
+// rest of the ridge line. Fitting the full sweep also means a peak keeps the
+// same height on screen no matter which way you are facing.
+function fitProfile() {
+  const P = HZ.P;
+  if (!P) { HZ.vLo = -3; HZ.vHi = 6; return; }
+  let mn = Infinity, mx = -Infinity;
+  for (let i = 0; i < P.rays; i++) {
+    const v = P.ang[i];
+    if (v < mn) mn = v;
+    if (v > mx) mx = v;
+  }
+  const span = mx - mn;
+  const pad = Math.max(0.25, span * 0.15);
+  let lo = mn - pad, hi = mx + pad * 1.6;      // a little more headroom above
+
+  /* Reach down for the nearer layers, but only so far.
+     
+     They only ever sit below the skyline, so they cannot raise the ceiling. But
+     fitting the floor to the lowest of them is a disaster: the nearest layer is
+     the ground at your feet, which from a hilltop plunges to -20 deg, and a
+     window that tall squashes the whole skyline into the top eighth of the
+     canvas -- throwing away exactly the vertical resolution Chart mode exists to
+     provide. Measured from three viewpoints, fitting to the true minimum makes
+     the window 11-21 deg tall against a skyline that spans 1.6-3.5.
+     
+     Ignoring them is no good either: from Mt Tamalpais that leaves 9% of the
+     nearer crests on screen, and they are the point of drawing them at all.
+     
+     So: extend to reach them, but never more than two skyline-spans below, which
+     lands 76-100% of them on screen for a window about twice the height. Sites
+     with no deep foreground keep the tighter window, because the bound is
+     against the data rather than replacing it. Still fitted once per profile. */
+  let smn = Infinity;
+  for (let i = 0; i < P.sub.ang.length; i++)
+    if (P.sub.ang[i] < smn) smn = P.sub.ang[i];
+  if (isFinite(smn)) lo = Math.min(lo, Math.max(smn - pad * 0.5, lo - 2 * span));
+  if (hi - lo < 0.8) { const c = (lo + hi) / 2; lo = c - 0.4; hi = c + 0.4; }
+  HZ.vLo = lo; HZ.vHi = hi;
+}
+
+const niceStep = v => {
+  const p = Math.pow(10, Math.floor(Math.log10(Math.max(1e-6, v))));
+  const n = v / p;
+  return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+};
+
+function drawHorizon() {
+  peakLabels = [];
+  fitCanvas();
+  ctx.fillStyle = sky; ctx.fillRect(0, 0, cw, ch);
+  const P = HZ.P;
+  const center = curCenter();
+
+  if (!P) {
+    ctx.fillStyle = "#5b6b80";
+    ctx.font = '500 13px ui-monospace,Menlo,monospace';
+    ctx.textAlign = "center";
+    ctx.fillText(HZ.loading ? "computing…" : "no profile yet", cw / 2, ch / 2);
+    ctx.textAlign = "left";
+    return;
+  }
+
+  if (HZ.mode === "true") HZ.vCenter += 0.2 * ((liveViewing() && S.haveTilt ? S.aim : 0) - HZ.vCenter);
+
+  /* Terrain, layer by layer, one column at a time so each can carry its own
+     haze. The skyline is layer 0 and every nearer ridge sits below it, so
+     painting far-to-near and giving each band the haze of the ground that
+     actually forms it is aerial perspective: each band further down a column is
+     nearer, hence darker, and a back ridge stays visible exactly where it clears
+     the fill in front of it.
+
+     Bands rather than overpainting. Each layer fills only from its own crest to
+     the next nearer crest, so the painted AREA is what it always was -- every
+     column still runs from the skyline to the bottom edge -- and only the call
+     count grows. The outer silhouette is untouched: layer 0 still comes from
+     angSpan(), so a view with one visible ridge draws exactly as it did before.
+
+     The per-column max is taken independently per layer, so two layers can cross
+     in a column where they came from different bins; clamping each band to start
+     no higher than the one above keeps the bands tiling the column with no seam. */
+  const n = Math.max(2, Math.round(cw));
+  const NL = 1 + P.subMax;
+  const YS = [], DS = [];
+  for (let L = 0; L < NL; L++) {
+    YS.push(new Float32Array(n + 1));
+    DS.push(new Float32Array(n + 1));
+  }
+  const tmp = [0];
+  for (let x = 0; x <= n; x++) {
+    const azL = center + deltaAt(x - 0.5), azR = center + deltaAt(x + 0.5);
+    YS[0][x] = projY(angSpan(azL, azR));
+    DS[0][x] = P.dist[binOf(center + deltaAt(x))];
+    for (let L = 1; L < NL; L++) {
+      const a = spanL(azL, azR, L, tmp);
+      YS[L][x] = a === -Infinity ? NaN : projY(a);
+      DS[L][x] = tmp[0];
+    }
+  }
+  let bkt = -1;                     // last haze bucket assigned to fillStyle
+  for (let x = 0; x < n; x++) {
+    let top = YS[0][x], last = 0;
+    for (let L = 1; L < NL; L++) {
+      const y = YS[L][x];
+      if (isNaN(y)) continue;
+      const yy = y > top ? y : top;
+      if (top < ch && yy > top) {
+        const k = hazeB(DS[last][x]);
+        if (k !== bkt) { ctx.fillStyle = P.hz[k]; bkt = k; }
+        const t = Math.max(0, top);
+        ctx.fillRect(x, t, 1.02, Math.min(ch, yy) - t);
+      }
+      top = yy; last = L;
+    }
+    if (top < ch) {                 // the nearest layer runs to the bottom edge
+      const k = hazeB(DS[last][x]);
+      if (k !== bkt) { ctx.fillStyle = P.hz[k]; bkt = k; }
+      const t = Math.max(0, top);
+      ctx.fillRect(x, t, 1.02, ch - t);
+    }
+  }
+
+  // Elevation grid.
+  const elTop = unprojY(0), elBot = unprojY(ch);
+  const step = niceStep(Math.abs(elTop - elBot) / 5);
+  ctx.font = '500 9px ui-monospace,Menlo,monospace';
+  ctx.lineWidth = 1;
+  for (let e = Math.ceil(elBot / step) * step; e <= elTop; e += step) {
+    const y = projY(e);
+    const zero = Math.abs(e) < 1e-9;
+    ctx.strokeStyle = zero ? "rgba(232,238,246,.34)" : "rgba(139,155,176,.13)";
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
+    ctx.fillStyle = zero ? "rgba(232,238,246,.6)" : "rgba(139,155,176,.5)";
+    // The fitted window puts the top gridline close to the edge, so pin the
+    // label inside rather than letting it clip.
+    ctx.fillText((e > 0 ? "+" : "") + e.toFixed(step < 1 ? 1 : 0) + "°",
+                 3, Math.max(9, y - 3));
+  }
+
+  // Azimuth ticks, on their own band -- terrain routinely reaches the bottom of
+  // the canvas, and dim ticks over lit ground are unreadable.
+  const tick = HZ.fov > 200 ? 30 : HZ.fov > 90 ? 15 : HZ.fov > 45 ? 10 : 5;
+  const half = HZ.fov / 2;
+  const band = 26;
+  const bg = ctx.createLinearGradient(0, ch - band, 0, ch);
+  bg.addColorStop(0, "rgba(7,10,15,0)");
+  bg.addColorStop(0.45, "rgba(7,10,15,.72)");
+  bg.addColorStop(1, "rgba(7,10,15,.92)");
+  ctx.fillStyle = bg; ctx.fillRect(0, ch - band, cw, band);
+  ctx.textAlign = "center";
+  for (let a = Math.ceil((center - half) / tick) * tick; a <= center + half; a += tick) {
+    const x = projX(a, center);
+    if (x < 0 || x > cw) continue;
+    const card = ((a % 90) + 90) % 90 < 1e-6;
+    ctx.strokeStyle = card ? "rgba(56,189,248,.8)" : "rgba(139,155,176,.42)";
+    ctx.beginPath(); ctx.moveTo(x, ch - (card ? 17 : 10)); ctx.lineTo(x, ch); ctx.stroke();
+    // Centred labels at the very edge get sliced in half ("220" reading as
+    // "0"), which is worse than no label. The tick mark still shows.
+    const room = x >= 15 && x <= cw - 15;
+    if (card && room) {
+      ctx.fillStyle = "#38bdf8";
+      ctx.font = '700 12px ui-monospace,Menlo,monospace';
+      ctx.fillText(CARDINALS[Math.round(norm360(a) / 22.5) % 16], x, ch - 21);
+    } else if (!card && room && HZ.fov <= 120) {
+      ctx.fillStyle = "rgba(174,190,210,.8)";
+      ctx.font = '500 9px ui-monospace,Menlo,monospace';
+      ctx.fillText(Math.round(norm360(a)) + "°", x, ch - 13);
+    }
+  }
+  ctx.textAlign = "left";
+
+  /* Ridge lines last, so they read above the fill; nearest first so the skyline
+     ends up on top. Each is broken where its distance jumps, for the reason
+     mpPaths() breaks the map outline: a layer is indexed from the top, so where
+     one bearing has a ridge its neighbour lacks, index L slides onto different
+     ground and joining the two would draw a line across a gap that is not a
+     ridge. Same test as the map -- 12x the lateral spacing one column subtends. */
+  const BREAK = 12;
+  for (let L = NL - 1; L >= 0; L--) {
+    ctx.beginPath();
+    let open = false;
+    for (let x = 0; x <= n; x++) {
+      const y = YS[L][x];
+      if (isNaN(y)) { open = false; continue; }
+      if (open) {
+        const dA = Math.abs(deltaAt(x) - deltaAt(x - 1)) * RAD;
+        const near = Math.min(DS[L][x], DS[L][x - 1]);
+        if (Math.abs(DS[L][x] - DS[L][x - 1]) > BREAK * Math.max(1, near * dA))
+          open = false;
+      }
+      if (open) ctx.lineTo(x, y);
+      else { ctx.moveTo(x, y); open = true; }
+    }
+    if (L === 0) { ctx.strokeStyle = "rgba(190,222,255,.85)"; ctx.lineWidth = 1.3; }
+    else { ctx.strokeStyle = "rgba(190,222,255,.3)"; ctx.lineWidth = 1; }
+    ctx.stroke();
+  }
+
+  // Where the phone is actually pointing.
+  ctx.save(); ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = "rgba(251,191,36,.55)"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(cw / 2, 0); ctx.lineTo(cw / 2, ch); ctx.stroke();
+  if (liveViewing() && S.haveTilt) {
+    const y = projY(S.aim);
+    if (y > 0 && y < ch) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
+    }
+  }
+  ctx.restore();
+
+  /* The crosshair is the picker, so show what it has hold of. The vertical
+     dashed line names the bearing and the horizontal one names which of the
+     ridges crossing it a tap would take; tick every intersection faintly and
+     ring the one that would be committed, so the choice is visible before it is
+     made rather than only afterwards in the readout. */
+  if (liveViewing() && S.heading != null) {
+    const b = binOf(center), nl = nLay(b), pick = aimLayer(b);
+    ctx.save();
+    ctx.strokeStyle = "rgba(251,191,36,.5)"; ctx.lineWidth = 1;
+    for (let L = 0; L < nl; L++) {
+      if (L === pick) continue;
+      const y = projY(layAng(b, L));
+      if (y < 0 || y > ch) continue;
+      ctx.beginPath(); ctx.moveTo(cw / 2 - 5, y); ctx.lineTo(cw / 2 + 5, y); ctx.stroke();
+    }
+    const y = projY(layAng(b, pick));
+    if (y >= 0 && y <= ch) {
+      // A dark casing under the ring, because it has to stay findable against
+      // both the near fill (nearly black) and the far one (nearly sky).
+      ctx.beginPath(); ctx.arc(cw / 2, y, 6, 0, 7);
+      ctx.strokeStyle = "rgba(10,13,18,.9)"; ctx.lineWidth = 3.4; ctx.stroke();
+      ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 1.8; ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (P.namedPeaks?.length) drawPeakLabels(center);
+
+  // Selection: anchored to a compass bearing, so it stays on the same ground
+  // as you turn rather than sliding with the screen.
+  if (HZ.selAz != null) {
+    const x = projX(HZ.selAz, center);
+    if (x >= -20 && x <= cw + 20) {
+      const b = binOf(HZ.selAz);
+      const y = projY(readoutTarget().point.ang);
+      ctx.strokeStyle = "#f87171"; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, 7);
+      ctx.fillStyle = "#f87171"; ctx.fill();
+      ctx.strokeStyle = "#0a0d12"; ctx.lineWidth = 1.6; ctx.stroke();
+    }
+  }
+}
+
+function restoreObserverSelection(selection) {
+  if (!selection || !HZ.P) return;
+  HZ.selAz = selection.bearing;
+  const b=binOf(HZ.selAz);
+  let layer=0, nearest=Infinity;
+  for(let L=0;L<nLay(b);L++) {
+    const p=layAt(b,L),distance=Math.hypot(p.lat-selection.point.lat,p.lon-selection.point.lon);
+    if(distance<nearest) { nearest=distance;layer=L; }
+  }
+  HZ.selLayer=layer;
+  if (nearest < 1e-8) { HZ.pinnedTarget=null; return; }
+  // Keep the physical target even if the new observer height hides its ridge
+  // or changes the visible-layer ordering. Only its sight angle changes.
+  const point={...selection.point};
+  point.ang=Math.atan2(Math.tan(point.ang*Math.PI/180)*point.dist+
+    selection.altitude-HZ.P.hObs,point.dist)*180/Math.PI;
+  HZ.pinnedTarget={bearing:HZ.selAz,point};
+}
+
+function readoutTarget() {
+  if (!HZ.P) return null;
+  const selected = HZ.selAz != null;
+  const b = binOf(selected ? HZ.selAz : curCenter());
+  const L = selected ? Math.min(HZ.selLayer, nLay(b) - 1) : 0;
+  return { b, L, selected, point: selected && HZ.pinnedTarget?.bearing === HZ.selAz ? HZ.pinnedTarget.point : layAt(b, L) };
+}
+
+function updateReadout() {
+  globalThis.projectAssets?.capture();
+  const P = HZ.P, ro = $("hz-readout");
+  const target = readoutTarget();
+  if (!target) { ro.classList.remove("on"); return; }
+  ro.classList.add("on");
+  const { b, L, point: o, selected } = target, nl = nLay(b), d = o.dist;
+  $("r-clear").hidden = !selected;
+  const peak = !HZ.pinnedTarget && (P.namedPeaks || []).find(p => p.bin === b && p.layer === L);
+  $("r-peak").hidden = !peak;
+  $("r-peak").textContent = peak ? `${peak.name} · approximate terrain match` : "";
+  $("r-az").textContent = (b * 360 / P.rays).toFixed(1) + "°";
+  $("r-el").textContent = (o.ang >= 0 ? "+" : "−") + Math.abs(o.ang).toFixed(2) + "°";
+  $("r-d").textContent = miles(d).toFixed(miles(d) >= 10 ? 1 : 2) + " mi";
+  $("r-h").textContent = o.elev + " m";
+  // Which line was taken, first: with several ridges under the crosshair the
+  // readout is the only confirmation of which one the tap actually got.
+  const which = nl > 1 && !HZ.pinnedTarget
+    ? (L === 0 ? `skyline of ${nl} lines` : `ridge ${L + 1} of ${nl}`) + "   ·   " : "";
+  $("r-ll").textContent = (selected ? "Selected point · " : "Center skyline · ") + which + `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}` +
+    (o.z === 0 ? "   ·   sea horizon" : `   ·   ${P.tiers.find(t => t.z === o.z) ? P.tiers.find(t => t.z === o.z).mPerPx + " m data" : "z" + o.z}`);
+}
+
+function movedFar() {
+  if (!HZ.at || !S.pos) return false;
+  const c = S.pos.coords;
+  const dy = (c.latitude - HZ.at.lat) * 111320;
+  const dx = (c.longitude - HZ.at.lon) * 111320 * Math.cos(c.latitude * RAD);
+  return Math.hypot(dx, dy) > 200;
+}
+
+/* ─── map ────────────────────────────────────────────── */
+// Web Mercator, ported verbatim from lib/terrain.js:17-29. The server shades
+// the relief in this projection and the sweep hands back lat/lon, so these two
+// copies must not drift -- change one and change the other.
+const TS = 256;
+const lon2px = (lon, z) => (lon + 180) / 360 * (TS << z);
+function lat2px(lat, z) {
+  const r = lat * RAD;
+  return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * (TS << z);
+}
+function px2lat(py, z) {
+  const n = Math.PI * (1 - 2 * py / (TS << z));
+  return Math.atan(Math.sinh(n)) * DEG;
+}
+const px2lon = (px, z) => px / (TS << z) * 360 - 180;
+const mPerPx = (lat, z) => 156543.03392 * Math.cos(lat * RAD) / (1 << z);
+
+const R_EARTH = 6371008.8;
+// Great-circle destination, from lib/horizon.js:138-145 but taking degrees.
+// The rings go through this instead of ctx.arc because a constant-ground-
+// distance ring is not a circle in Mercator: 0.6% off here, 8.7% at latitude 70
+// with a 200 km radius, which is a visibly wrong ring.
+function destination(lat, lon, azDeg, d) {
+  const p1 = lat * RAD, l1 = lon * RAD, dr = d / R_EARTH, a = azDeg * RAD;
+  const sp = Math.sin(p1), cp = Math.cos(p1);
+  const sd = Math.sin(dr), cd = Math.cos(dr);
+  const p2 = Math.asin(sp * cd + cp * sd * Math.cos(a));
+  const l2 = l1 + Math.atan2(Math.sin(a) * sd * cp, cd - sp * Math.sin(p2));
+  return [p2 * DEG, ((l2 * DEG + 540) % 360) - 180];
+}
+
+// True initial great-circle bearing -- the same expression the sweep splats
+// with at lib/horizon.js:100. A local flat frame is 0.38 deg out at 50 km, 0.57
+// at 100 km and 2.9 deg at latitude 70: two to twelve bins, enough that tapping
+// a peak selects a different peak and the readout names ground you did not
+// touch. movedFar() gets away with the flat form because it only asks a yes/no
+// question at 200 m.
+function bearingTo(lat, lon) {
+  const p1 = MP.lat0 * RAD, p2 = lat * RAD, dl = wrap180(lon - MP.lon0) * RAD;
+  return norm360(Math.atan2(Math.sin(dl) * Math.cos(p2),
+    Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)) * DEG);
+}
+
+const MP = {
+  img: null,          // ImageBitmap of the relief, null until it arrives
+  geo: null,          // its georeferencing, exactly as the server sent it
+  seq: 0,             // request token, so a slow decode cannot land on a new profile
+  zoom: 0,            // 0 = fit, otherwise the multiple of the mapped square
+  z: 11,              // the Mercator zoom every projection below works in
+  lat0: 0, lon0: 0,   // the PROFILE's origin, not the live fix
+  k: 1, cx: 0, cy: 0, // the affine: canvas px per Mercator px, and the centre
+  ridge: null,        // pre-built Path2Ds in canvas px, rebuilt with the affine
+  dirty: true,
+};
+
+const mcv = $("mp"), mtx = mcv.getContext("2d");
+const satelliteMap = new SatelliteMap(() => { MP.dirty = true; });
+$("sat-retry").onclick = () => satelliteMap.retry();
+let mw = 0, mh = 0, mdpr = 0;
+function fitMapCanvas() {          // -> did the geometry change?
+  const r = mcv.getBoundingClientRect();
+  const d = Math.min(3, window.devicePixelRatio || 1);
+  if (r.width === mw && r.height === mh && d === mdpr) return false;
+  mw = r.width; mh = r.height; mdpr = d;
+  mcv.width = Math.max(1, Math.round(mw * d));
+  mcv.height = Math.max(1, Math.round(mh * d));
+  mtx.setTransform(d, 0, 0, d, 0, 0);
+  return true;
+}
+
+/* Projection. The relief arrives as an axis-aligned Mercator crop, so placing
+   it and placing the horizon polygon are the same affine -- one forward map,
+   one exact inverse, and every tap goes back through the inverse, the same
+   discipline the profile keeps. x and y are independent in Mercator, which is
+   why the inverse is two one-dimensional functions instead of a matrix; that is
+   also why the map is north-up and does not pan. Adding rotation would put a
+   matrix here and reintroduce exactly the drift this shape prevents. */
+const mpX = lon => (lon2px(lon, MP.z) - MP.cx) * MP.k + mw / 2;
+const mpY = lat => (lat2px(lat, MP.z) - MP.cy) * MP.k + mh / 2;
+const mpLon = x => px2lon((x - mw / 2) / MP.k + MP.cx, MP.z);
+const mpLat = y => px2lat((y - mh / 2) / MP.k + MP.cy, MP.z);
+
+// Distance colour for the ridge. Deliberately NOT haze(): that ramp runs from
+// near-black up to the sky colour, which is right for a silhouette against a
+// bright sky and invisible against a dark map. Same idea -- far washes out --
+// carried onto a dark ground.
+//
+// Red, because the relief underneath is grey slate and a blue line disappears
+// into it: the hillshade already occupies the whole cool half of the wheel, so
+// the only colour with anywhere to stand is the opposite one.
+// The ramp is compressed into the band that stays legible on slate rather than
+// running down to near-black the way haze() does. Distance still reads -- near
+// is a solid crimson, far is pale pink -- but nothing on it disappears, which
+// is the whole reason the line is red in the first place.
+function mapHaze(d) {
+  const f = Math.min(1, Math.sqrt(d / Math.max(1000, HZ.P.radius)));
+  return `rgb(${185 + f * 70 | 0},${40 + f * 140 | 0},${50 + f * 135 | 0})`;
+}
+
+// Canvas px per Mercator px at 1x, the mapped square exactly filling the card.
+function mpK1() {
+  const P = HZ.P;
+  if (!P || !mw) return 0;
+  return Math.min(mw, mh) / (2 * (P.radius / mPerPx(MP.lat0, MP.z)));
+}
+
+// Zoom and pan both stop at the sweep's own radius. There is no relief out
+// there and no horizon either, so travelling further only shows dark.
+function mpClamp() {
+  const k1 = mpK1();
+  if (!k1) return;
+  MP.k = clamp(MP.k, k1, k1 * 1024);
+  const half = HZ.P.radius / mPerPx(MP.lat0, MP.z);
+  const ox = lon2px(MP.lon0, MP.z), oy = lat2px(MP.lat0, MP.z);
+  MP.cx = clamp(MP.cx, ox - half, ox + half);
+  MP.cy = clamp(MP.cy, oy - half, oy + half);
+}
+
+// The only thing that writes the affine.
+function mpAffine() {
+  const P = HZ.P;
+  if (!P || !mw) return;
+  // A pinch has set the affine by hand -- leave it alone, only keep it in
+  // bounds. This is what lets a pinched view survive a resize and a redraw.
+  if (MP.zoom < 0) { mpClamp(); return; }
+  const ox = lon2px(MP.lon0, MP.z), oy = lat2px(MP.lat0, MP.z);
+  const side = Math.min(mw, mh);
+  // 1x is the mapped square itself: +/- radius ground metres at the observer,
+  // which in a conformal projection is +/- that many Mercator px. It is also
+  // exactly the relief's own extent.
+  const half = P.radius / mPerPx(MP.lat0, MP.z);
+  const k1 = side / (2 * half);
+
+  if (MP.zoom > 0) {
+    MP.cx = ox; MP.cy = oy; MP.k = k1 * MP.zoom;
+  } else if (HZ.selAz != null) {
+    const b = binOf(HZ.selAz);
+    const point = HZ.pinnedTarget?.bearing === HZ.selAz ? HZ.pinnedTarget.point : layAt(b, Math.min(HZ.selLayer, nLay(b) - 1));
+    const px = lon2px(point.lon, MP.z), py = lat2px(point.lat, MP.z);
+    MP.cx = (ox + px) / 2; MP.cy = (oy + py) / 2;
+    // Ten percent of the point-to-point span on each side. A small minimum
+    // extent also keeps coincident points and perfectly straight axes stable.
+    const minSpan = side / (k1 * 1024);
+    const width = Math.max(Math.abs(px - ox) * 1.2, minSpan);
+    const height = Math.max(Math.abs(py - oy) * 1.2, minSpan);
+    MP.k = Math.min(mw / width, mh / height, k1 * 1024);
+  } else {
+    // Fit, and the default. Over open water the horizon is a small circle
+    // inside a large square -- 9.8 km of dip distance at a standing eye height
+    // inside a 50 km radius -- so 1x would be nine tenths empty sea. On land
+    // this lands near 1x on its own. The 1024x ceiling is safe because a fit that
+    // deep only happens over water, where the relief is one flat palette index.
+    //
+    // The 1x floor matters just as much. From a summit the sea horizon runs
+    // past the mapped radius -- 100 km from Mt Tamalpais against a 50 km
+    // sweep -- and following it would shrink the relief into the middle of an
+    // empty card to chase an arc drawn over ground the server never fetched.
+    // It is clipped instead.
+    //
+    // Centred on the observer, not on the horizon's bounding box. This pane is
+    // about what can be seen FROM HERE, and a bbox centre shoves the marker
+    // into a corner whenever the horizon is lopsided -- which on a coast it
+    // always is: from Twin Peaks the sea horizon is 61 km out to the west and
+    // the ridge line only 20 km to the east.
+    let rad = 0;
+    for (let i = 0; i < P.rays; i++) {
+      // Chebyshev, because the canvas being fitted is a square.
+      const r = Math.max(Math.abs(lon2px(P.lon[i], MP.z) - ox),
+                         Math.abs(lat2px(P.lat[i], MP.z) - oy));
+      if (r > rad) rad = r;
+    }
+    MP.cx = ox; MP.cy = oy;
+    MP.k = clamp(side / (2 * rad * 1.08 || 1), k1, k1 * 1024);
+  }
+}
+
+// The ridge is pre-built as paths in canvas pixels, so it is rebuilt whenever
+// the affine moves: a zoom press, a pinch frame, a resize, a new profile.
+function mpPaths() {
+  const P = HZ.P;
+  MP.ridge = null;
+  if (!P || !mw) return;
+
+  // 1440 short strokes a frame becomes 12, by bucketing the distance colour.
+  const NB = 12, R = Math.max(1000, P.radius);
+  const paths = [], cols = [];
+  for (let b = 0; b < NB; b++) {
+    paths.push(new Path2D());
+    cols.push(mapHaze(R * ((b + 0.5) / NB) ** 2));
+  }
+  const bkt = d => clamp(Math.floor(Math.sqrt(Math.min(1, d / R)) * NB), 0, NB - 1);
+
+  // Where the skyline steps, do not draw a line across the step.
+  //
+  // Adjacent bins are 0.25 deg apart, so along one continuous ridge the horizon
+  // point slides sideways by d*0.0044 and its distance barely changes: measured
+  // from San Francisco, the median step is 12 m and the 90th percentile 187 m.
+  // A step of kilometres means the argmax jumped to a different ridge -- the
+  // Berkeley hills at 23 km and the Diablo range at 34 km sit within 0.05 deg
+  // of each other in elevation angle from here, so which one wins flips bin to
+  // bin. Joining those two points draws a radial spike that is not a skyline
+  // and is the loudest thing on the card. Breaking at 12x the lateral bin
+  // spacing cuts about 7% of segments, which is the empty ground between the
+  // two populations (the 90th percentile is 6.8x, the 99th is 235x).
+  //
+  // The FILL still spans the step, because the ground between the two ridges
+  // genuinely is visible through that gap. Only the outline breaks.
+  const BREAK = 12, dAz = 2 * Math.PI / P.rays;
+
+  const sea = new Path2D(), fill = new Path2D();
+  let px = mpX(P.lon[0]), py = mpY(P.lat[0]);
+  fill.moveTo(px, py);
+  for (let i = 0; i < P.rays; i++) {
+    const j = (i + 1) % P.rays;
+    const qx = mpX(P.lon[j]), qy = mpY(P.lat[j]);
+    if (j) fill.lineTo(qx, qy);
+    const near = Math.min(P.dist[i], P.dist[j]);
+    if (Math.abs(P.dist[j] - P.dist[i]) < BREAK * Math.max(1, near * dAz)) {
+      // A sea-horizon bin is the analytic dip floor (lib/horizon.js:124-132),
+      // not observed ground, so it is dashed rather than coloured by distance.
+      const t = (P.z[i] === 0 && P.z[j] === 0) ? sea : paths[bkt((P.dist[i] + P.dist[j]) / 2)];
+      t.moveTo(px, py); t.lineTo(qx, qy);
+    }
+    px = qx; py = qy;
+  }
+  fill.closePath();
+  MP.ridge = { paths, cols, sea, fill };
+}
+
+const mpFit = () => { mpAffine(); mpPaths(); };
+function mpFitSelection() {
+  MP.zoom = 0;
+  for (const button of $("mp-zoom").querySelectorAll("button"))
+    button.classList.toggle("on", button.dataset.k === "0");
+  mpFit(); MP.dirty = true;
+}
+
+function drawCenterReadoutRay(ox, oy) {
+  const target = readoutTarget();
+  if (!target || target.selected) return;
+  const x = mpX(target.point.lon), y = mpY(target.point.lat);
+  // Drawing only: following the center bearing must not refit or recenter the map.
+  mtx.save();
+  mtx.lineCap = "round";
+  mtx.beginPath(); mtx.moveTo(ox, oy); mtx.lineTo(x, y);
+  mtx.strokeStyle = "rgba(0,0,0,.65)"; mtx.lineWidth = 2.5; mtx.stroke();
+  mtx.strokeStyle = "#fff"; mtx.lineWidth = 1; mtx.stroke();
+  mtx.restore();
+}
+
+function drawMap() {
+  if (document.body.classList.contains("full")) return;   // the card is hidden
+  if (mapView !== "2d") { drawTerrainView(); return; }
+  if (fitMapCanvas()) mpFit();
+  const P = HZ.P;
+  mtx.fillStyle = "#070a0f"; mtx.fillRect(0, 0, mw, mh);
+
+  if (!P) {
+    $("sat-status").textContent = terrainError;
+    $("sat-retry").hidden = true;
+    mtx.fillStyle = "#5b6b80";
+    mtx.font = '500 13px ui-monospace,Menlo,monospace';
+    mtx.textAlign = "center";
+    mtx.fillText(HZ.loading ? "computing…" : "no profile yet", mw / 2, mh / 2);
+    mtx.textAlign = "left";
+    return;
+  }
+  if (!MP.ridge) mpFit();
+
+  const imagery = satelliteMap.draw(mtx, { ...MP, width: mw, height: mh, dpr: mdpr });
+  $("sat-status").textContent = terrainError || (imagery.failed
+    ? "Some satellite imagery is unavailable. Check your connection and retry."
+    : imagery.ready < imagery.total ? `Loading satellite imagery ${imagery.ready}/${imagery.total}…` : "");
+  $("sat-retry").hidden = !imagery.failed;
+
+  const ox = mpX(MP.lon0), oy = mpY(MP.lat0);
+  mtx.font = '500 9px ui-monospace,Menlo,monospace';
+  mtx.lineWidth = 1;
+
+  // Distance rings and cardinals, as great-circle polylines.
+  const step = niceStep(miles(P.radius) / 3) * METERS_PER_MILE;
+  for (let d = step; d <= P.radius + 1; d += step) {
+    mtx.strokeStyle = "rgba(139,155,176,.22)";
+    mtx.beginPath();
+    for (let a = 0; a <= 72; a++) {
+      const [la, lo] = destination(MP.lat0, MP.lon0, a * 5, d);
+      const x = mpX(lo), y = mpY(la);
+      a ? mtx.lineTo(x, y) : mtx.moveTo(x, y);
+    }
+    mtx.closePath(); mtx.stroke();
+    const [la, lo] = destination(MP.lat0, MP.lon0, 0, d);
+    mtx.fillStyle = "rgba(139,155,176,.55)";
+    mtx.fillText(mileLabel(d), mpX(lo) + 4, mpY(la) + 11);
+  }
+  mtx.textAlign = "center";
+  for (let c = 0; c < 4; c++) {
+    const [la, lo] = destination(MP.lat0, MP.lon0, c * 90, P.radius * 0.985);
+    mtx.fillStyle = "rgba(232,238,246,.45)";
+    mtx.fillText("NESW"[c], mpX(lo), mpY(la) + 3);
+  }
+  mtx.textAlign = "left";
+
+  // The horizon. The interior is the whole point of the pane -- it is the
+  // ground you can see from here -- so it gets a wash, not just an outline.
+  const R = MP.ridge;
+  if (R && !window.projectAssets?.active) {
+    mtx.fillStyle = "rgba(248,113,113,.07)";
+    mtx.fill(R.fill);
+    mtx.lineWidth = 1.6;
+    for (let b = 0; b < R.paths.length; b++) {
+      mtx.strokeStyle = R.cols[b]; mtx.stroke(R.paths[b]);
+    }
+    mtx.setLineDash([4, 4]);
+    mtx.strokeStyle = "#fda4af"; mtx.lineWidth = 1.2;
+    mtx.stroke(R.sea);
+    mtx.setLineDash([]);
+  }
+
+  // Where the phone is pointing: a wedge, not a ray, so it shows the actual
+  // slice of ground the profile above is drawing. curCenter() already folds in
+  // the Align correction.
+  {
+    const c = curCenter(), h = HZ.fov / 2;
+    mtx.beginPath(); mtx.moveTo(ox, oy);
+    for (let a = -h; a <= h + 1e-9; a += HZ.fov / 24) {
+      const [la, lo] = destination(MP.lat0, MP.lon0, c + a, P.radius);
+      mtx.lineTo(mpX(lo), mpY(la));
+    }
+    mtx.closePath();
+    // Kept faint on purpose: at a 60 deg field this covers a sixth of the card,
+    // and it is an annotation on the map, not a layer of it.
+    mtx.fillStyle = "rgba(251,191,36,.06)"; mtx.fill();
+    mtx.strokeStyle = "rgba(251,191,36,.34)"; mtx.lineWidth = 1; mtx.stroke();
+  }
+
+  // If the fix has drifted from where the sweep was taken, show the drift
+  // rather than only describing it in the status line.
+  if (movedFar()) {
+    const c = S.pos.coords, x = mpX(c.longitude), y = mpY(c.latitude);
+    mtx.strokeStyle = "rgba(251,191,36,.65)"; mtx.lineWidth = 1;
+    mtx.beginPath(); mtx.moveTo(ox, oy); mtx.lineTo(x, y); mtx.stroke();
+    mtx.beginPath(); mtx.arc(x, y, 3.5, 0, 7);
+    mtx.fillStyle = "#fbbf24"; mtx.fill();
+  }
+
+  drawCenterReadoutRay(ox, oy);
+
+  // The selection, drawn at the ground the readout names rather than at a
+  // distance along the bearing, so the X really is the place.
+  if (HZ.selAz != null) {
+    // The picked layer, not the skyline: choose a foreground ridge on the chart
+    // and the map ray now stops short of the outline, on the ground that ridge
+    // really is. The outline itself stays the skyline -- it is the edge of what
+    // can be seen, and the nearer ridges are inside it by definition.
+    const b = binOf(HZ.selAz), o = readoutTarget().point;
+    const x = mpX(o.lon), y = mpY(o.lat);
+    mtx.save();
+    mtx.lineCap = "round";
+    mtx.beginPath(); mtx.moveTo(ox, oy); mtx.lineTo(x, y);
+    mtx.strokeStyle = "#000"; mtx.lineWidth = 4; mtx.stroke();
+    mtx.strokeStyle = "#fff"; mtx.lineWidth = 2; mtx.stroke();
+    // Stroke the whole X twice so its black casing remains continuous.
+    mtx.beginPath();
+    mtx.moveTo(x - 4, y - 4); mtx.lineTo(x + 4, y + 4);
+    mtx.moveTo(x - 4, y + 4); mtx.lineTo(x + 4, y - 4);
+    mtx.strokeStyle = "#000"; mtx.lineWidth = 5; mtx.stroke();
+    mtx.strokeStyle = "#fff"; mtx.lineWidth = 2.5; mtx.stroke();
+    mtx.restore();
+  }
+
+  // Keep the source circle above the connecting line.
+  mtx.beginPath(); mtx.arc(ox, oy, 4.5, 0, 7);
+  mtx.fillStyle = "#e8eef6"; mtx.fill();
+  mtx.strokeStyle = "#0a0d12"; mtx.lineWidth = 1.6; mtx.stroke();
+
+  window.projectAssets?.draw2D(mtx);
+  // Scale bar and a north mark, since the view is fixed north-up.
+  const mpp = mPerPx(MP.lat0, MP.z) / MP.k;      // ground metres per canvas px
+  const bar = niceStep(miles(mpp * mw / 4)) * METERS_PER_MILE, bw = bar / mpp;
+  mtx.strokeStyle = "rgba(232,238,246,.5)"; mtx.lineWidth = 1.5;
+  mtx.beginPath();
+  mtx.moveTo(10, mh - 12); mtx.lineTo(10 + bw, mh - 12);
+  mtx.moveTo(10, mh - 15.5); mtx.lineTo(10, mh - 8.5);
+  mtx.moveTo(10 + bw, mh - 15.5); mtx.lineTo(10 + bw, mh - 8.5);
+  mtx.stroke();
+  mtx.fillStyle = "rgba(232,238,246,.65)";
+  mtx.fillText(mileLabel(bar),
+               10, mh - 19);
+  mtx.fillStyle = "rgba(232,238,246,.5)";
+  mtx.beginPath();
+  mtx.moveTo(mw - 14, 9); mtx.lineTo(mw - 10.5, 16); mtx.lineTo(mw - 17.5, 16);
+  mtx.closePath(); mtx.fill();
+  mtx.textAlign = "center";
+  mtx.fillText("N", mw - 14, 26);
+  mtx.textAlign = "left";
+}
+
+segPick("mp-zoom", "k", v => { MP.zoom = +v; mpFit(); MP.dirty = true; });
+
+/* One finger pans, two fingers pinch; only an unmoved tap selects. */
+const pts = new Map();     // live pointers on the canvas
+let pinch = null;          // the anchor a pinch holds under the fingers
+let multi = false;         // did this gesture ever have a second finger?
+
+const mpLocal = e => {
+  const r = mcv.getBoundingClientRect();
+  return [e.clientX - r.left, e.clientY - r.top];
+};
+const mpMid = () => {
+  const [a, b] = [...pts.values()];
+  return [(a.x + b.x) / 2, (a.y + b.y) / 2, Math.hypot(a.x - b.x, a.y - b.y) || 1];
+};
+
+// A pinch leaves the zoom between the steps, so no button is lit.
+function mpFreeZoom() {
+  MP.zoom = -1;
+  mpClamp();
+  for (const b of $("mp-zoom").querySelectorAll("button")) b.classList.remove("on");
+  mpPaths();
+  MP.dirty = true;
+}
+
+// Zoom about a fixed point: whatever ground was under it stays under it. Doing
+// it this way means the pinch needs no separate pan case -- following the
+// moving midpoint IS the pan.
+function mpZoomAbout(x, y, k) {
+  const wx = (x - mw / 2) / MP.k + MP.cx, wy = (y - mh / 2) / MP.k + MP.cy;
+  const k1 = mpK1() || MP.k;
+  MP.k = clamp(k, k1, k1 * 1024);
+  MP.cx = wx - (x - mw / 2) / MP.k;
+  MP.cy = wy - (y - mh / 2) / MP.k;
+  mpFreeZoom();
+}
+
+mcv.addEventListener("pointerdown", e => {
+  if (!HZ.P || (e.pointerType === "mouse" && e.button !== 0)) return;
+  e.preventDefault();
+  mcv.setPointerCapture(e.pointerId);
+  const [x, y] = mpLocal(e);
+  pts.set(e.pointerId, { x0: x, y0: y, t0: Date.now(), x, y, moved: false,
+    cx: MP.cx, cy: MP.cy });
+  if (pts.size === 2 && HZ.P) {
+    multi = true;
+    const [mx, my, d] = mpMid();
+    // The Mercator point under the midpoint, captured ONCE. Re-deriving it from
+    // the live affine each frame would feed the gesture its own output and let
+    // the map creep under stationary fingers.
+    pinch = { d, k: MP.k,
+              wx: (mx - mw / 2) / MP.k + MP.cx,
+              wy: (my - mh / 2) / MP.k + MP.cy };
+  } else if (pts.size > 2) {
+    pinch = null;              // three fingers is not a gesture this pane has
+  }
+});
+
+mcv.addEventListener("pointermove", e => {
+  const p = pts.get(e.pointerId);
+  if (!p) return;
+  [p.x, p.y] = mpLocal(e);
+  if (Math.hypot(p.x - p.x0, p.y - p.y0) > 6) p.moved = true;
+  if (pts.size === 1) {
+    if (!p.moved) return;
+    MP.cx = p.cx - (p.x - p.x0) / MP.k;
+    MP.cy = p.cy - (p.y - p.y0) / MP.k;
+    mpFreeZoom();
+    return;
+  }
+  if (pts.size !== 2 || !pinch) return;
+  e.preventDefault();
+  const [mx, my, d] = mpMid();
+  // Hold the anchored ground under the midpoint wherever the fingers take it.
+  // Following the moving midpoint IS the pan, so there is no separate case.
+  const k1 = mpK1() || MP.k;
+  MP.k = clamp(pinch.k * (d / pinch.d), k1, k1 * 1024);
+  MP.cx = pinch.wx - (mx - mw / 2) / MP.k;
+  MP.cy = pinch.wy - (my - mh / 2) / MP.k;
+  mpFreeZoom();
+}, { passive: false });
+
+function mpEnd(e) {
+  const p = pts.get(e.pointerId);
+  pts.delete(e.pointerId);
+  if (pts.size < 2) pinch = null;
+  if (mcv.hasPointerCapture(e.pointerId)) mcv.releasePointerCapture(e.pointerId);
+  if (pts.size === 1) {
+    // Re-anchor the remaining finger after pinching, so dragging never jumps.
+    const remaining = [...pts.values()][0];
+    remaining.x0 = remaining.x; remaining.y0 = remaining.y;
+    remaining.cx = MP.cx; remaining.cy = MP.cy; remaining.moved = true;
+  }
+  if (pts.size) return null;
+  const wasMulti = multi;
+  multi = false;
+  return wasMulti ? null : p;
+}
+
+mcv.addEventListener("pointerup", e => {
+  const p = mpEnd(e);
+  if (!p || p.moved || !HZ.P) return;
+  const [x, y] = mpLocal(e);
+  // A selection is a tap: it went nowhere and did not linger. Anything longer
+  // or further was a pan, a pinch, or a press.
+  if (Math.hypot(x - p.x0, y - p.y0) > 10 || Date.now() - p.t0 > 500) return;
+  // Stored unsnapped: binOf() snaps at read time for both panes, so the profile
+  // and the map run through identical code and cannot disagree about the bin.
+  HZ.pinnedTarget = null; HZ.selAz = bearingTo(mpLat(y), mpLon(x));
+  // Map taps move the selection only; keep the current map framing.
+  MP.dirty = true;
+});
+
+mcv.addEventListener("pointercancel", mpEnd);
+mcv.addEventListener("lostpointercapture", e => { if (pts.has(e.pointerId)) mpEnd(e); });
+
+// A trackpad pinch reaches the page as a ctrl-modified wheel. A plain wheel is
+// the page scrolling and has to be left alone.
+mcv.addEventListener("wheel", e => {
+  if (!e.ctrlKey || !HZ.P) return;
+  e.preventDefault();
+  const [x, y] = mpLocal(e);
+  mpZoomAbout(x, y, MP.k * Math.exp(-e.deltaY / 180));
+}, { passive: false });
+
+/* ─── fetching the profile ───────────────────────────── */
+let es = null;
+let terrainView = null, terrainData = null, mapView = "2d", terrainError = "";
+const observerStates = {
+  '3d': { height: 'photo', customHeight: 30 },
+  perspective: { height: 'custom', customHeight: 30 }
+};
+const terrainModeViews = {};
+let observerRefreshView = null, gameReturnView = "2d", pendingGame = false;
+try {
+  const saved = JSON.parse(localStorage.getItem('terrain.observerStates.v3'));
+  for (const mode of ['3d', 'perspective']) {
+    const state = saved?.[mode];
+    if (state && ['ground','photo','custom'].includes(state.height) &&
+      Number.isFinite(state.customHeight) && state.customHeight >= 1.6 && state.customHeight <= 5000)
+      observerStates[mode] = state;
+  }
+} catch {}
+let photoObserverHeight = observerStates['3d'].height, photoCustomHeight = observerStates['3d'].customHeight;
+$("custom-height").value = photoCustomHeight;
+
+function setMapView(view) {
+  const changingMode = view !== mapView;
+  if (!["2d", "3d", "perspective", "game"].includes(view)) return;
+  if ((view === "perspective" || view === "game") && !terrainData) return;
+  if (view === 'game' && !S.pos) return;
+  if (view === 'game' && changingMode) {
+    const p=terrainPoint(terrainData,{lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,elev:0});
+    if(Math.max(Math.abs(p[0]),Math.abs(p[2]))>1) {
+      resetLocationOutput();pendingGame=true;mapHorizon();return;
+    }
+    gameReturnView=mapView;
+  }
+  if (mapView === 'game' && changingMode) terrainView?.game?.stop();
+  if (changingMode && terrainView?.model && mapView !== '2d' && mapView !== 'game')
+    terrainModeViews[mapView] = terrainView.captureView();
+  if (view !== "2d") {
+    try {
+      if (!terrainView) {
+        terrainView = new TerrainView($("mp3d"), () => { MP.dirty = true; }, message => {
+          setMapView("2d"); terrainError = message; $("sat-status").textContent = message;
+        }, bearing => {
+          if (liveViewing()) HZ.nudge = wrap180(bearing - (S.heading ?? 0));
+          else HZ.photoBearing = bearing;
+          MP.dirty = true;
+        });
+        terrainView.setModel(terrainData);
+      }
+      if (terrainView.lost) throw new Error("3D graphics are still recovering. Please try again shortly.");
+      if (mapView === "2d") {
+        if (fitMapCanvas()) mpFit();
+        terrainView.matchMapView({ ...MP, height: mh });
+      }
+      // A fresh 2D framing takes precedence over the saved orbit camera.
+      if (changingMode && terrainModeViews[view] && !(mapView === '2d' && view === '3d'))
+        terrainView.restoreView(terrainModeViews[view]);
+      else if (changingMode) terrainView.photoView = false;
+      if (view === "3d") terrainView.photoView = false;
+      if (view === 'game' && changingMode) {
+        terrainView.game ||= new TerrainGame(terrainView);
+        terrainView.game.onExit=()=>setMapView(gameReturnView);
+        terrainView.game.speedMultiplier=Number($('game-speed').value);
+        terrainView.game.start({lat:S.pos.coords.latitude,lon:S.pos.coords.longitude},curCenter());
+      }
+      if (view === "perspective") terrainView.setPhotoView(perspectiveSource());
+      terrainView.dirty = true;
+    } catch (error) {
+      terrainError = error.message; $("sat-status").textContent = terrainError; return;
+    }
+  }
+  terrainError = ""; mapView = view;
+  updateViewCompass();
+  document.body.classList.toggle('game-mode',view==='game');
+  $('game-controls').hidden=view!=='game';
+  if(view==='game') $('mp3d').focus();
+  terrainView?.cancelGestures();
+  $("mp").hidden = view !== "2d"; $("mp3d").hidden = view === "2d";
+  $("map-zoom-row").hidden = view !== "2d";
+  $("terrain-controls").hidden = $("terrain-hint").hidden = view === "2d";
+  $("terrain-empty").hidden = view === "2d" || !!terrainData;
+  $("terrain-hint").textContent = view === "perspective" ? "Drag to look · Pinch to zoom" : "Tap source, target, or line to choose orbit · Drag to orbit · Shift + drag to pan";
+  $("terrain-reset").hidden = view === "perspective";
+  $("mp3d").setAttribute("aria-label", view === "perspective"
+    ? "Perspective viewpoint. Drag or use arrow keys to look around. Pinch or plus and minus zoom. Home levels the view."
+    : "3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets.");
+  for (const button of $("map-view").querySelectorAll("button")) {
+    button.classList.toggle("on", button.dataset.v === view);
+    button.setAttribute("aria-pressed", String(button.dataset.v === view));
+  }
+  MP.dirty = true;
+  if (changingMode && (view === '3d' || view === 'perspective')) {
+    const state = observerStates[view];
+    changePhotoObserver(state.height, state.customHeight);
+  }
+}
+function perspectiveSource() {
+  return { ground: HZ.P?.ground, eye: HZ.P?.eye ?? 1.6, altitude: liveViewing() ? undefined : S.pos?.coords.altitude,
+    sensorPitch: liveViewing() && S.haveTilt ? S.aim : 0,
+    observerAltitude: HZ.P?.hObs, observerSource: observerHeightLabel(),
+    bearing: curCenter(), fov: HZ.fov };
+}
+function observerHeightLabel() {
+  return HZ.P?.observerSource === "ground" && photoObserverHeight === "custom" ? `Custom (${HZ.P.eye.toFixed(1)} m above ground)`
+    : HZ.P?.observerSource === "photo" ? "Photo altitude"
+    : HZ.P?.observerSource === "ground-clamped" ? "Ground (photo altitude below terrain)" : "Ground + eye level";
+}
+function drawTerrainView() {
+  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : "Photo viewpoint") : "3D terrain";
+  $("terrain-empty").hidden = !!terrainData;
+  $("terrain-empty").textContent = HZ.loading ? "Loading terrain…" : HZ.P
+    ? "Waiting for 3D terrain…" : "Map a location to explore its terrain in 3D.";
+  $("terrain-reload").hidden = HZ.loading || !HZ.P || !!terrainData;
+  try {
+    if (mapView === "perspective") terrainView.setPhotoView(perspectiveSource());
+    if(mapView==='game' && terrainView.game?.active) {
+      const game=terrainView.game,ground=gameGround(terrainView,game.position[0],game.position[2]);
+      const markedTarget=readoutTarget();
+      $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
+      $('game-goto-target').title=!markedTarget?.selected?'Mark a target first'
+        : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Move to the marked target';
+      const laserHit=game.laser().hit;
+      $('game-target').disabled=!laserHit;
+      $('game-target').textContent=laserHit?'Place laser target':'Aim laser at terrain';
+      $('game-status').textContent=`${game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
+    }
+    terrainView.render(readoutTarget(), HZ.P?.hObs ?? (HZ.P ? HZ.P.ground + HZ.P.eye : 0));
+    updateViewCompass();
+  }
+  catch (error) { setMapView("2d"); terrainError = "3D could not render. The 2D map is still available.";
+    appDiagnostics.record("terrain.failed", { message: error.message }, "warn"); return; }
+  const imagery = terrainView.imageryStatus;
+  $("sat-status").textContent = !terrainData ? "" : imagery?.failed ? "Some imagery is unavailable. Retry imagery to fill the gaps."
+    : imagery && imagery.ready < imagery.total ? `Loading satellite imagery ${imagery.ready}/${imagery.total}…` : "";
+  $("sat-retry").hidden = !terrainData || !imagery?.failed;
+  $("terrain-status").textContent = terrainData
+    ? `${terrainView.meshLevels} terrain levels · ~${Math.round(terrainView.meshSpacing)} m nearby spacing · True height` +
+      (terrainData.failed ? ` · ${terrainData.failed} terrain tile(s) unavailable, shown at sea level.` : "")
+    : "The profile and its readout keep their full precision at every detail setting.";
+  if (terrainData && Number.isFinite(HZ.P?.hObs)) {
+    $("terrain-status").textContent += ` · Observer: ${observerHeightLabel()}, ${HZ.P.hObs.toFixed(1)} m`;
+  }
+  if (mapView === '3d' && terrainData) {
+    const pivot={source:'source',target:'target',midpoint:'line midpoint'}[terrainView.orbitSelection] || 'view center';
+    $("terrain-status").textContent += ` · Orbit: ${pivot}`;
+  }
+  if (mapView === "perspective" && terrainView.photoCamera) {
+    const camera = terrainView.photoCamera;
+    $("terrain-status").textContent = `${camera.altitudeSource}: ${camera.altitude.toFixed(1)} m · ${terrainView.photoFov.toFixed(0)}° view · ~${Math.round(terrainView.meshSpacing)} m nearby terrain spacing. Drag to adjust camera tilt.`;
+  }
+}
+function updateViewCompass() {
+  const compass=$("view-compass"),bearing=mapView!=="2d" ? terrainCameraBearing(terrainView?.activeCamera) : null;
+  compass.hidden=!Number.isFinite(bearing);
+  if(compass.hidden)return;
+  const degrees=Math.round(bearing)%360,cardinal=CARDINALS[Math.round(bearing/22.5)%16];
+  $("view-compass-arrow").style.transform=`rotate(${-bearing}deg)`;
+  compass.setAttribute("aria-label",`View heading ${degrees} degrees ${cardinal}`);
+}
+let photoPreviewURL = null;
+function clearPhotoPreview() {
+  photoViewer.reset();
+  const img = $("photo-preview");
+  img.onload = null; img.onerror = null;
+  img.removeAttribute("src");
+  if (photoPreviewURL) URL.revokeObjectURL(photoPreviewURL);
+  photoPreviewURL = null;
+  $("photo-reference").hidden = true;
+  document.body.classList.remove("photo-mode");
+}
+function showPhotoPreview(file) {
+  clearPhotoPreview();
+  const img = $("photo-preview"), url = URL.createObjectURL(file);
+  photoPreviewURL = url;
+  $("photo-reference").hidden = false;
+  document.body.classList.add("photo-mode");
+  $("photo-caption").textContent = file.name;
+  $("photo-preview-status").textContent = "Loading photo preview…";
+  img.hidden = false;
+  img.onload = () => {
+    if (photoPreviewURL === url) {
+      $("photo-preview-status").textContent = "";
+      photoViewer.reset();
+    }
+  };
+  img.onerror = () => {
+    if (photoPreviewURL !== url) return;
+    img.hidden = true;
+    $("photo-preview-status").textContent = "This browser cannot display this photo format. For a preview, choose a JPEG or PNG copy with location data. The extracted location still works.";
+  };
+  img.src = url;
+}
+// Switching origins must discard the previous sweep, including pending relief.
+function resetLocationOutput() {
+  if(mapView === "game") setMapView("2d");
+  pendingGame=false;
+  for (const mode of Object.keys(terrainModeViews)) delete terrainModeViews[mode];
+  observerRefreshView = null;
+  cancelProfilePan();
+  if (es) { es.close(); es = null; }
+  terrainData = null; terrainView?.setModel(null);
+  HZ.loading = false; HZ.P = null; HZ.at = null; HZ.err = false;
+  HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0; HZ.pinAim = null;
+  $("peak-count").textContent = "";
+  $("peak-list").textContent = "";
+  $("peak-status").textContent = "Map the horizon to find named peaks.";
+  $("peak-retry").hidden = true;
+  if (MP.img) MP.img.close();
+  MP.img = null; MP.geo = null; MP.ridge = null; MP.seq++; MP.dirty = true;
+}
+
+let photoRequest = 0;
+$("photo-pick").onclick = () => $("photo-file").click();
+$("gate-photo").onclick = () => {
+  $("gate").classList.add("hidden");
+  $("photo-file").click();
+};
+$("photo-file").onchange = async e => {
+  const file = e.target.files[0];
+  e.target.value = ""; // Allow retrying the same file.
+  if (!file) return;
+  const request = ++photoRequest;
+  $("photo-status").textContent = "Reading photo location…";
+  try {
+    const coords = await readPhotoLocation(file);
+    if (request !== photoRequest) return;
+    appDiagnostics.record("photo.loaded", { mode: "photo" });
+    resetLocationOutput();
+    S.locationSource = "photo"; S.photoName = file.name;
+    HZ.photoInitialBearing = coords.photoBearing ?? 0;
+    HZ.photoBearing = HZ.photoInitialBearing; HZ.vCenter = 0;
+    showPhotoPreview(file);
+    $("hz-bearing-label").textContent = "Photo bearing";
+    $("pan-hint").hidden = true;
+    S.pos = { coords, timestamp: Date.now() }; S.posErr = null;
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    $("use-gps").classList.remove("on");
+    $("photo-pick").classList.add("on");
+    $("location-source").textContent = `Photo: ${file.name} · ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+    $("photo-status").textContent = "";
+    mapHorizon();
+    $("card-horizon").scrollIntoView({ block: "start" });
+  } catch (err) {
+    appDiagnostics.record("photo.failed", { message: err.message }, "warn");
+    if (request === photoRequest) $("photo-status").textContent = err.message;
+  }
+};
+$("use-gps").onclick = () => {
+  ++photoRequest;
+  $("photo-status").textContent = "";
+  if (S.locationSource === "gps") { enableSensors("photo-status"); return; }
+  if (mapView === "perspective") setMapView("2d");
+  resetLocationOutput();
+  S.locationSource = "gps"; S.photoName = ""; S.pos = null; S.posErr = null;
+  clearPhotoPreview();
+  $("hz-bearing-label").textContent = "Correction";
+  $("pan-hint").textContent = "Slide the profile to align with a landmark. Live compass panning keeps your correction.";
+  $("pan-hint").hidden = false;
+  S.hold = false;
+  $("btn-hold").classList.remove("on");
+  $("btn-hold").textContent = "Hold";
+  document.querySelectorAll("#card-pos").forEach(el => el.classList.remove("held"));
+  $("use-gps").classList.add("on");
+  $("photo-pick").classList.remove("on");
+  $("location-source").textContent = "Using device GPS.";
+  enableSensors("photo-status");
+};
+
+function mapHorizon() {
+  if (!S.pos || HZ.loading) return;
+  const c = observerRefreshView?.origin || S.pos.coords;
+  if (es) { es.close(); es = null; }
+  terrainData = null; terrainView?.setModel(null);
+  // A stale relief under a fresh polygon is the most confusing thing this pane
+  // could show, so it goes at once, and the token invalidates any decode still
+  // in flight.
+  if (MP.img) MP.img.close();
+  MP.img = null; MP.geo = null; MP.ridge = null; MP.seq++; MP.dirty = true;
+  // A pinched view is centred on ground chosen for the old sweep, so it means
+  // nothing at a new one. The zoom STEPS are a preference and survive.
+  if (MP.zoom < 0) {
+    MP.zoom = 0;
+    const b = $("mp-zoom").querySelector('button[data-k="0"]');
+    for (const o of $("mp-zoom").querySelectorAll("button")) o.classList.toggle("on", o === b);
+  }
+  HZ.loading = true; HZ.err = false; HZ.status = "Preparing terrain…";
+  const url = `horizon-worker://compute/?lat=${c.latitude.toFixed(6)}&lon=${c.longitude.toFixed(6)}` +
+              `&radius=${HZ.radius}&norelief&terrain` +
+              (S.locationSource === "photo" && photoObserverHeight === "photo" && Number.isFinite(c.altitude)
+                ? `&photoalt=${c.altitude}` : photoObserverHeight === "custom"
+                  ? `&eye=${photoCustomHeight}` : "");
+  es = new EventSource(url);
+  const stream = es;
+  let requestId;
+  appDiagnostics.record("horizon.start", { radius: HZ.radius, mode: S.locationSource });
+  es.addEventListener("request", e => {
+    if (es !== stream) return;
+    requestId = JSON.parse(e.data).requestId;
+    appDiagnostics.record("horizon.request", { requestId });
+  });
+  es.addEventListener("progress", e => {
+    if (es !== stream) return;
+    const g = JSON.parse(e.data);
+    HZ.status = g.phase === "tiles"
+      ? `Terrain ${g.done}/${g.total} tiles…` : "Sweeping the horizon…";
+  });
+  es.addEventListener("terrain", e => {
+    if (es !== stream) return;
+    try {
+      terrainData = JSON.parse(e.data);
+      terrainView?.setModel(terrainData);
+      if (observerRefreshView && observerRefreshView.mode === mapView) terrainView?.restoreView(observerRefreshView.view);
+      else if (mapView === "3d") terrainView?.matchMapView({ ...MP, height: $("mp3d").clientHeight });
+      observerRefreshView = null;
+      MP.dirty = true;
+      if(pendingGame){pendingGame=false;setMapView("game");}
+    } catch (error) {
+      terrainData = null;
+      appDiagnostics.record("terrain.failed", { message: error.message }, "warn");
+    }
+  });
+  es.addEventListener("result", e => {
+    if (es !== stream) return;
+    HZ.P = JSON.parse(e.data);
+    appDiagnostics.record("horizon.result", { requestId, durationMs: HZ.P.ms.tiles + HZ.P.ms.sweep });
+    prepProfile(HZ.P);
+    loadNamedPeaks(HZ.P);
+    HZ.at = { lat: c.latitude, lon: c.longitude };
+    HZ.selLayer = 0; HZ.aimLay = 0;
+    restoreObserverSelection(observerRefreshView?.selection);
+    fitProfile();
+    // The map is anchored to where the sweep was taken, not to the live fix, so
+    // it stays consistent with the profile after you walk away -- which is what
+    // movedFar() exists to warn about. Default the zoom to the outermost tier's
+    // so the pane still works if the relief never arrives; the relief event
+    // overrides it with its own.
+    MP.lat0 = HZ.P.lat0; MP.lon0 = HZ.P.lon0;
+    MP.z = HZ.P.tiers[HZ.P.tiers.length - 1].z;
+    mpFit(); MP.dirty = true;
+    HZ.loading = false; HZ.err = false;
+    const f = HZ.P.tiers.reduce((a, t) => a + t.failed, 0);
+    HZ.status = f ? `Ready — ${f} tile(s) unavailable, treated as sea.` : "";
+    // Deliberately not closing here any more: the relief follows on this same
+    // stream. The worker ends the stream once it is out, and onerror below
+    // closes the EventSource before it can reconnect and re-run the sweep --
+    // which is what closing on result was protecting against.
+  });
+  es.addEventListener("relief", async e => {
+    if (es !== stream) return;
+    const g = JSON.parse(e.data), seq = MP.seq;
+    if (es) { es.close(); es = null; }   // nothing follows the relief
+    try {
+      const bin = Uint8Array.from(atob(g.png), ch => ch.charCodeAt(0));
+      const img = await createImageBitmap(new Blob([bin], { type: "image/png" }));
+      // createImageBitmap is async, so a re-map during the decode really can
+      // drop a stale basemap onto a new profile. Check the token before using it.
+      if (seq !== MP.seq) { img.close(); return; }
+      MP.img = img; MP.geo = g; MP.z = g.z;
+      mpFit(); MP.dirty = true;
+    } catch { /* the skyline is the point; a missing basemap is not fatal */ }
+  });
+  es.addEventListener("failed", e => {
+    if (es !== stream) return;
+    HZ.loading = false; HZ.err = true;
+    HZ.status = JSON.parse(e.data).error;
+    appDiagnostics.record("horizon.failed", { requestId, message: HZ.status }, "error");
+    if (es) { es.close(); es = null; }
+  });
+  es.onerror = () => {
+    if (es !== stream) return;
+    if (HZ.loading) appDiagnostics.record("horizon.connection_lost", { requestId }, "error");
+    if (HZ.loading) { HZ.loading = false; HZ.err = true; HZ.status = "The terrain calculation stopped unexpectedly."; }
+    if (es) { es.close(); es = null; }
+  };
+}
+
+/* Named peaks load independently of terrain, with stale responses discarded. */
+let peakRequest = null, peakLabels = [];
+async function loadNamedPeaks(profile) {
+  if (peakRequest) peakRequest.abort();
+  const request = peakRequest = new AbortController();
+  peakLabels = []; profile.namedPeaks = [];
+  $("peak-count").textContent = "";
+  $("peak-list").replaceChildren();
+  $("peak-status").textContent = "Finding peak names…";
+  $("peak-retry").hidden = true;
+  try {
+    const query = `[out:json][timeout:20];node["natural"="peak"]["name"](around:${profile.radius},${profile.lat0},${profile.lon0});out body;`;
+    const response = await fetch("https://overpass-api.de/api/interpreter", {
+      method: "POST", body: new URLSearchParams({ data: query }),
+      headers: { Accept: "application/json" }, signal: request.signal,
+    });
+    if (!response.ok) throw new Error("Peak names unavailable");
+    const raw = await response.json();
+    if (HZ.P !== profile || request !== peakRequest) return;
+    if (raw.remark || !Array.isArray(raw.elements)) throw new Error("Invalid peak data");
+    const peaks = raw.elements.flatMap(node => {
+      if (node.type !== "node" || !Number.isSafeInteger(node.id) || !Number.isFinite(node.lat) ||
+          !Number.isFinite(node.lon) || typeof node.tags?.name !== "string") return [];
+      const name = node.tags.name.replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, 120);
+      return name ? [{ id: node.id, name, lat: node.lat, lon: node.lon }] : [];
+    });
+    profile.namedPeaks = NamedPeaks.match(profile, peaks);
+    $("peak-count").textContent = `(${profile.namedPeaks.length})`;
+    $("peak-status").textContent = profile.namedPeaks.length
+      ? "Tap a name to select its ridge. Slide the horizon to explore labels."
+      : "No confident named-peak matches in this terrain. Try a wider range or another viewpoint.";
+    for (const peak of profile.namedPeaks) {
+      const button = document.createElement("button");
+      button.textContent = `${peak.name} · ${mileLabel(peak.dist)}`;
+      button.onclick = () => selectNamedPeak(peak);
+      $("peak-list").appendChild(button);
+    }
+  } catch (error) {
+    if (request.signal.aborted || HZ.P !== profile || request !== peakRequest) return;
+    $("peak-status").textContent = "Peak names unavailable. The terrain still works.";
+    $("peak-retry").hidden = false;
+  }
+}
+function selectNamedPeak(peak) {
+  if (!HZ.P?.namedPeaks?.includes(peak)) return;
+  HZ.pinnedTarget = null; HZ.selAz = peak.bearing; HZ.selLayer = peak.layer;
+  mpFitSelection();
+}
+function drawPeakLabels(center) {
+  ctx.save(); ctx.font = '600 11px -apple-system,system-ui,sans-serif';
+  const selected = HZ.P.namedPeaks.find(p => HZ.selAz != null && p.bin === binOf(HZ.selAz) && p.layer === HZ.selLayer);
+  peakLabels = NamedPeaks.layout(HZ.P.namedPeaks, a => projX(a, center), projY, cw, ch,
+    text => ctx.measureText(text).width, selected?.id);
+  for (const box of peakLabels) {
+    ctx.strokeStyle = "#b9e5ff"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(box.x, box.y); ctx.lineTo(box.left+box.w/2, box.top+20); ctx.stroke();
+    ctx.fillStyle = "rgba(10,18,28,.92)"; ctx.fillRect(box.left, box.top, box.w, 20);
+    ctx.fillStyle = box.peak.id === selected?.id ? "#f87171" : "#cceeff";
+    ctx.textAlign = "left"; ctx.fillText(box.label, box.left+7, box.top+14);
+    ctx.beginPath(); ctx.arc(box.x, box.y, 3, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.restore();
+}
+$("peak-retry").onclick = () => { if (HZ.P) loadNamedPeaks(HZ.P); };
+
+/* ─── horizon controls ───────────────────────────────── */
+function segPick(id, attr, fn) {
+  $(id).addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    for (const o of $(id).querySelectorAll("button")) o.classList.toggle("on", o === b);
+    fn(b.dataset[attr]);
+  });
+}
+function changeRange(value) {
+  if (HZ.radius === +value) return;
+  HZ.radius = +value;
+  if (S.locationSource === "photo" && S.pos) {
+    // Cancel an in-flight sweep so rapid changes always use the latest range.
+    resetLocationOutput();
+    mapHorizon();
+  } else if (HZ.P) HZ.status = "Range changed — map again.";
+}
+segPick("hz-range", "r", changeRange);
+segPick("hz-fov", "f", v => { HZ.fov = +v; });
+segPick("hz-mode", "m", v => { HZ.mode = v; });
+$("map-view").onclick = e => { const button = e.target.closest("button"); if (button) setMapView(button.dataset.v); };
+segPick("terrain-detail", "d", detail => terrainView?.setDetail(detail));
+function changePhotoObserver(height, customHeight = photoCustomHeight) {
+  if (!["ground", "photo", "custom"].includes(height)) return;
+  if (!Number.isFinite(customHeight) || customHeight < 1.6 || customHeight > 5000) return;
+  if (photoObserverHeight === height && photoCustomHeight === customHeight) return;
+  photoObserverHeight = height; photoCustomHeight = customHeight;
+  $("custom-height").value = photoCustomHeight;
+  try {
+    observerStates[mapView === 'perspective' ? 'perspective' : '3d'] = { height, customHeight };
+    localStorage.setItem('terrain.observerStates.v3', JSON.stringify(observerStates));
+  } catch {}
+  if (!S.pos) return;
+  const saved = observerRefreshView || (terrainView ? {mode: mapView, view: terrainView.captureView()} : null);
+  if (saved && !saved.selection && HZ.P && HZ.selAz != null) {
+    saved.selection={bearing:HZ.selAz,point:{...readoutTarget().point},altitude:HZ.P.hObs};
+  }
+  if (saved && !saved.origin && HZ.P) saved.origin={latitude:HZ.P.lat0,longitude:HZ.P.lon0,altitude:S.pos.coords.altitude};
+  const modeViews = {...terrainModeViews};
+  resetLocationOutput(); Object.assign(terrainModeViews, modeViews); observerRefreshView = saved;
+  mapHorizon();
+}
+segPick("photo-observer", "height", height => changePhotoObserver(height));
+$("custom-height-row").onsubmit = event => {
+  event.preventDefault();
+  if ($("custom-height").checkValidity()) changePhotoObserver("custom", Number($("custom-height").value));
+};
+$('game-exit').onclick=()=>setMapView(gameReturnView);
+$('game-speed').onchange=()=>{if(terrainView?.game)terrainView.game.speedMultiplier=Number($('game-speed').value);};
+$('game-respawn').onclick=()=>terrainView?.game?.reset();
+$('game-goto-target').onclick=()=>{
+  const target=readoutTarget(),game=terrainView?.game;
+  if(game?.active && target?.selected && game.goToTarget(target.point))MP.dirty=true;
+};
+$('game-target').onclick=()=>{
+  const game=terrainView?.game;if(!game?.active || !HZ.P)return;
+  const hit=game.laser().hit;if(!hit)return;
+  const target=gameTarget(game,HZ.P.hObs,HZ.P.k ?? .13,hit);
+  HZ.selAz=target.bearing;HZ.selLayer=0;HZ.pinnedTarget=target;
+  game.targetPlaced=true;mpFitSelection();
+};
+bindGameStick($('game-stick'),()=>terrainView?.game);
+for(const button of document.querySelectorAll('[data-game-key]')) {
+  const stop=event=>{event.preventDefault();terrainView?.game?.keys.delete(button.dataset.gameKey);};
+  button.addEventListener('pointerdown',event=>{
+    event.preventDefault();button.setPointerCapture(event.pointerId);terrainView?.game?.keys.add(button.dataset.gameKey);
+  });
+  for(const type of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(type,stop);
+}
+$("terrain-reset").onclick = () => {
+  if (mapView === "perspective") terrainView?.resetPhotoView(); else terrainView?.resetCamera();
+};
+$("terrain-reload").onclick = mapHorizon;
+$("sat-retry").onclick = () => {
+  if (mapView !== "2d") terrainView?.imagery.retry(); else satelliteMap.retry();
+};
+
+$("hz-go").onclick = mapHorizon;
+$("hz-nudge-reset").onclick = () => {
+  cancelProfilePan();
+  if (liveViewing()) {
+    HZ.nudge = 0;
+    try { localStorage.setItem("hz.nudge", "0"); } catch {}
+  } else HZ.photoBearing = HZ.photoInitialBearing;
+  MP.dirty = true;
+};
+$("r-clear").onclick = () => { HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0; mpFitSelection(); };
+// Actions use the same point as the readout, including the photo center fallback.
+const selPoint = () => readoutTarget()?.point;
+$("r-maps").onclick = () => {
+  const o = selPoint();
+  if (!o) return;
+  openMap(o.lat, o.lon);
+};
+$("r-copy").onclick = async e => {
+  const pt = selPoint();
+  if (!pt) return;
+  const txt = `${pt.lat.toFixed(5)}, ${pt.lon.toFixed(5)}`;
+  try { await navigator.clipboard.writeText(txt); }
+  catch { const t = document.createElement("textarea"); t.value = txt;
+          document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove(); }
+  const o = e.target.textContent; e.target.textContent = "Copied";
+  setTimeout(() => e.target.textContent = o, 1200);
+};
+
+/* ─── touch on the profile ───────────────────────────── */
+let profilePan = null;
+const localX = e => e.clientX - cvs.getBoundingClientRect().left;
+const localY = e => e.clientY - cvs.getBoundingClientRect().top;
+
+/* A tap marks where the crosshair is pointing, not where the finger landed.
+
+   Aim the phone at the ridge -- the vertical dashed line picks the bearing, the
+   horizontal one picks which of the ridges crossing it -- then tap anywhere.
+   That is the whole gesture, and it works one-handed with the phone held up at
+   the skyline, which tapping a specific pixel does not.
+
+   A desktop browser has no magnetometer, so there is no "where the phone is
+   pointing" to mark and the centre bearing is a fiction. There it keeps the
+   original meaning instead: x picks the bearing and y picks the line. */
+function pickAt(e) {
+  const hit = peakLabels.find(b => localX(e) >= b.left && localX(e) <= b.left+b.w &&
+    localY(e) >= b.top-5 && localY(e) <= b.top+25);
+  if (hit) { selectNamedPeak(hit.peak); return; }
+  if (!liveViewing() || S.heading == null) {
+    HZ.pinnedTarget = null; HZ.selAz = unprojX(localX(e), curCenter());
+    const b = binOf(HZ.selAz), y = localY(e);
+    let best = 0, bd = Infinity;
+    for (let L = 0; L < nLay(b); L++) {
+      const d = Math.abs(projY(layAng(b, L)) - y);
+      if (d < bd) { bd = d; best = L; }
+    }
+    HZ.selLayer = best;
+  } else {
+    /* Tapping the same thing twice steps past it.
+
+       Needed because two ridges can sit closer together in angle than the aim
+       can resolve -- from here the Berkeley hills and the Diablo range are 0.05
+       deg apart, well inside the hysteresis and far inside the phone's own pitch
+       noise -- so aiming alone cannot always reach the second one. It is also
+       the whole gesture when motion permission was refused and there is no
+       horizontal line to choose with.
+
+       Pinning the aim to this tap is what makes the step stick: without it
+       aimLayer() would recompute from an unchanged S.aim, decide the skyline is
+       nearest after all, and drag the selection back on the next tap. The pin
+       lifts as soon as the phone is actually moved, so aiming still wins. */
+    const b = binOf(curCenter());
+    const want = S.haveTilt ? aimLayer(b) : (HZ.selAz == null ? 0 : HZ.selLayer);
+    const same = HZ.selAz != null && binOf(HZ.selAz) === b && HZ.selLayer === want;
+    HZ.pinnedTarget = null; HZ.selAz = curCenter();
+    HZ.selLayer = same ? (want + 1) % nLay(b) : want;
+    HZ.aimLay = HZ.selLayer;
+    HZ.pinAim = S.haveTilt ? S.aim : null;
+  }
+  mpFitSelection();
+}
+
+cvs.addEventListener("pointerdown", e => {
+  if (!HZ.P || profilePan || e.isPrimary === false || (e.pointerType === "mouse" && e.button !== 0)) return;
+  e.preventDefault();
+  cvs.setPointerCapture(e.pointerId);
+  profilePan = { id: e.pointerId, x: localX(e), y: localY(e), moved: false,
+    photo: !liveViewing(), offset: liveViewing() ? HZ.nudge : HZ.photoBearing };
+});
+cvs.addEventListener("pointermove", e => {
+  const p = profilePan;
+  if (!p || p.id !== e.pointerId) return;
+  if (Math.hypot(localX(e) - p.x, localY(e) - p.y) > 6) p.moved = true;
+  if (!p.moved) return;
+  const offset = p.offset - (deltaAt(localX(e)) - deltaAt(p.x));
+  if (p.photo) HZ.photoBearing = norm360(offset);
+  else HZ.nudge = wrap180(offset);
+  cvs.classList.add("panning");
+  MP.dirty = true;
+});
+function finishProfilePan(e, cancelled = false) {
+  const p = profilePan;
+  if (!p || p.id !== e.pointerId) return;
+  profilePan = null;
+  if (cancelled) {
+    if (p.photo) HZ.photoBearing = p.offset;
+    else HZ.nudge = p.offset;
+  } else if (p.moved) {
+    if (!p.photo) try { localStorage.setItem("hz.nudge", String(HZ.nudge)); } catch {}
+  } else if (HZ.P) pickAt(e);
+  cvs.classList.remove("panning");
+  if (cvs.hasPointerCapture(e.pointerId)) cvs.releasePointerCapture(e.pointerId);
+  MP.dirty = true;
+}
+function cancelProfilePan() {
+  if (profilePan) finishProfilePan({ pointerId: profilePan.id }, true);
+}
+cvs.addEventListener("pointerup", e => finishProfilePan(e));
+cvs.addEventListener("pointercancel", e => finishProfilePan(e, true));
+cvs.addEventListener("lostpointercapture", e => finishProfilePan(e, true));
+
+/* ─── controls ───────────────────────────────────────── */
+$("btn-hold").onclick = e => {
+  S.hold = !S.hold;
+  e.target.classList.toggle("on", S.hold);
+  e.target.textContent = S.hold ? "Holding" : "Hold";
+  for (const id of ["card-pos"])
+    $(id).classList.toggle("held", S.hold);
+};
+$("btn-copy").onclick = async e => {
+  if (!S.pos) return;
+  const c = S.pos.coords;
+  const txt = `${c.latitude.toFixed(6)}, ${c.longitude.toFixed(6)}`;
+  try { await navigator.clipboard.writeText(txt); }
+  catch { const t = document.createElement("textarea"); t.value = txt;
+          document.body.appendChild(t); t.select();
+          document.execCommand("copy"); t.remove(); }
+  const o = e.target.textContent; e.target.textContent = "Copied";
+  setTimeout(() => e.target.textContent = o, 1200);
+};
+$("btn-maps").onclick = () => {
+  if (!S.pos) return;
+  const c = S.pos.coords;
+  openMap(c.latitude, c.longitude);
+};
+
+/* ─── which map app a coordinate opens in ────────────── */
+// Apple gets its own scheme so it opens the app straight off. The other two
+// are ordinary https links, which iOS hands to the app when it is installed
+// and to the browser when it isn't — so they open in a new tab rather than
+// navigating this page away and losing the sweep.
+const MAP_APPS = {
+  apple:  { name: "Apple Maps", short: "Apple",
+            url: (a, o) => `maps://?q=${a},${o}&ll=${a},${o}` },
+  google: { name: "Google Maps", short: "Google",
+            url: (a, o) => `https://www.google.com/maps/search/?api=1&query=${a},${o}` },
+  // Gaia takes zoom/lon/lat and centres there; it has no pin parameter.
+  gaia:   { name: "Gaia GPS", short: "Gaia",
+            url: (a, o) => `https://www.gaiagps.com/map/?loc=14/${o}/${a}` },
+};
+let mapApp = "apple";
+try { mapApp = localStorage.getItem("map.app") || "apple"; } catch {}
+if (!MAP_APPS[mapApp]) mapApp = "apple";
+
+function openMap(lat, lon) {
+  const a = lat.toFixed(6), o = lon.toFixed(6);
+  const url = MAP_APPS[mapApp].url(a, o);
+  if (url.startsWith("http")) window.open(url, "_blank", "noopener");
+  else location.href = url;
+}
+function labelMapApp() {
+  const m = MAP_APPS[mapApp];
+  $("r-maps").textContent = `Open in ${m.name}`;
+  $("btn-maps").textContent = m.short;
+  for (const b of $("map-app").querySelectorAll("button"))
+    b.classList.toggle("on", b.dataset.a === mapApp);
+}
+segPick("map-app", "a", v => {
+  mapApp = v;
+  try { localStorage.setItem("map.app", v); } catch {}
+  labelMapApp();
+});
+labelMapApp();
+
+/* ─── keep the screen awake ──────────────────────────── */
+let wake = null;
+async function keepAwake() {
+  try { if ("wakeLock" in navigator) wake = await navigator.wakeLock.request("screen"); }
+  catch {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") keepAwake();
+});
+
+/* ─── permission gate ────────────────────────────────── */
+function attach() {
+  window.addEventListener("deviceorientation", onOrientation, true);
+  window.addEventListener("deviceorientationabsolute", onOrientation, true);
+}
+
+async function enableSensors(errorTarget = "gate-err") {
+  const errs = [];
+  try {
+    const DOE = window.DeviceOrientationEvent;
+    if (DOE && typeof DOE.requestPermission === "function") {
+      const r = await DOE.requestPermission();
+      if (r !== "granted") errs.push("Motion & Orientation access was denied.");
+    }
+    const DME = window.DeviceMotionEvent;
+    if (DME && typeof DME.requestPermission === "function") {
+      await DME.requestPermission().catch(() => {});
+    }
+  } catch (err) { errs.push("Sensor request failed: " + err.message); }
+
+  attach();
+  startGeo();
+  keepAwake();
+
+  if (errs.length) {
+    $(errorTarget).textContent = errs.join("\n") +
+      "\n\nEnable Settings › Apps › Safari › Motion & Orientation Access, then reload.";
+  } else {
+    $("gate").classList.add("hidden");
+  }
+}
+$("gate-btn").onclick = () => enableSensors();
+
+if (!window.isSecureContext) {
+  $("gate-msg").textContent =
+    "This page is not on a secure origin, so iOS will not release the " +
+    "compass, tilt, or GPS sensors.";
+  $("gate-err").textContent =
+    "Open this app from its https:// address. Location and motion sensors are unavailable on an insecure page.";
+  $("gate-btn").disabled = true;
+  $("gate-btn").style.opacity = .4;
+} else if (!(window.DeviceOrientationEvent &&
+             typeof window.DeviceOrientationEvent.requestPermission === "function")) {
+  // Non-iOS (or iOS with prompts already handled): no gesture needed.
+  attach(); startGeo(); keepAwake();
+  $("gate-msg").textContent = "Tap to start.";
+}
+appDiagnostics.setContext(() => ({ mode: S.locationSource, fov: HZ.fov, radius: HZ.radius }));
+</script>
+<script src="./project-assets.js"></script>
+<script src="./pwa.js"></script>
+</body>
+</html>

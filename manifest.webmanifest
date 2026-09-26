@@ -1,0 +1,14 @@
+{
+  "name": "Horizon Mapper",
+  "short_name": "Horizon",
+  "description": "Map terrain horizons, photos, GPX tracks, and viewpoints in the browser.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0a0d12",
+  "theme_color": "#0a0d12",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
