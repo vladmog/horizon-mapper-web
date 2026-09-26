@@ -2,6 +2,8 @@
 
 Horizon Mapper Web is the browser-only, installable version of Horizon Mapper. It maps a photographed or live GPS viewpoint against real terrain, supports 2D, 3D, perspective, and game views, loads GPX tracks, and saves multi-photo projects locally.
 
+**Live app:** https://vladmog.github.io/horizon-mapper-web/
+
 ## Run locally
 
 Serve this directory over HTTPS or from `localhost`; opening `index.html` directly will not give Web Workers, location, and motion sensors the required browser security context.
