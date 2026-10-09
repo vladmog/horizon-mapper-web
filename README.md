@@ -27,3 +27,9 @@ Mapping still requires third-party data requests. AWS, Esri, and the OpenStreetM
 ## Deployment
 
 The Pages workflow publishes the repository root after every push to `main`. The workflow needs GitHub Pages configured to use **GitHub Actions** as its source.
+
+## Expanded map views and external maps
+
+Use **Full screen** beside the map-view selector to expand 2D, 3D, or Perspective to fill the browser viewport. Switch views while expanded; **Exit full screen** or Escape restores the page. Game keeps its existing full-screen layout. Exiting Game returns to the previous map view, including its expanded state.
+
+In Game, mark a target with the laser or use an existing selected map target, then choose **Open in Apple Maps**, **Google Maps**, or **Gaia GPS**. This uses the same provider selected on the main page and the same target coordinates. The button stays disabled until a target is selected.

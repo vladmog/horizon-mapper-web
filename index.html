@@ -204,6 +204,15 @@
   #terrain-empty{position:absolute;inset:0 0 24px;display:grid;place-items:center;
     padding:24px;text-align:center;pointer-events:none}
   #map-view-row{margin:0 0 10px}
+  body.map-fullscreen{overflow:hidden}
+  body.map-fullscreen #card-map{position:fixed;inset:0;z-index:100;margin:0;padding:0;border:0;border-radius:0;background:#070a0f;display:flex;flex-direction:column}
+  body.map-fullscreen:not(.game-mode) #card-map > :not(#mp-wrap):not(#map-view-row){display:none!important}
+  body.map-fullscreen:not(.game-mode) #map-view-row{flex:none;margin:0;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left));background:var(--card)}
+  body.map-fullscreen:not(.game-mode) #terrain-hint{display:none}
+  body.map-fullscreen:not(.game-mode) #mp-wrap{flex:1;min-height:0;border:0;border-radius:0}
+  body.map-fullscreen:not(.game-mode) #mp,body.map-fullscreen:not(.game-mode) #mp3d{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
+  body.map-fullscreen:not(.game-mode) #mp-attribution{position:absolute;bottom:0;right:0;left:0;pointer-events:none}
+  #map-fullscreen{margin-left:auto;white-space:nowrap}
   body.game-mode{overflow:hidden}
   body.game-mode #card-map{position:fixed;inset:0;z-index:100;margin:0;padding:0;border:0;border-radius:0;background:#070a0f}
   body.game-mode #card-map > :not(#mp-wrap):not(#game-controls){display:none!important}
@@ -322,6 +331,7 @@
       <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Load a photo and its terrain to use its viewpoint">Perspective</button>
       <button data-v="game" id="map-game" aria-pressed="false" disabled>Game</button>
     </div>
+    <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
     <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
   </div>
   <div id="mp-wrap"><canvas id="mp"></canvas>
@@ -336,7 +346,7 @@
   </div>
   <div id="game-controls" hidden>
     <div class="game-header">
-    <div class="game-top"><button id="game-exit">Exit game</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-target">Place laser target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
+    <div class="game-top"><button id="game-exit">Exit game</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-maps" disabled>Open in Maps</button><button id="game-target">Place laser target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
     <div id="game-status" role="status"></div>
     <p class="game-help">WASD / arrows: run · Shift: sprint · Drag: aim laser / look · E / Q: up / down · Esc: exit</p>
     </div>
@@ -1661,6 +1671,29 @@ mcv.addEventListener("wheel", e => {
 /* ─── fetching the profile ───────────────────────────── */
 let es = null;
 let terrainView = null, terrainData = null, mapView = "2d", terrainError = "";
+let mapFullscreen = false, mapScrollY = 0;
+function setMapFullscreen(expanded) {
+  if (expanded === mapFullscreen) return;
+  if (expanded) mapScrollY = window.scrollY;
+  mapFullscreen = expanded;
+  document.body.classList.toggle('map-fullscreen', expanded);
+  $('map-fullscreen').textContent = expanded ? 'Exit full screen' : 'Full screen';
+  $('map-fullscreen').setAttribute('aria-pressed', String(expanded));
+  MP.dirty = true;
+  requestAnimationFrame(() => {
+    MP.dirty = true;
+    if (!expanded) window.scrollTo(0, mapScrollY);
+  });
+}
+$('map-fullscreen').onclick = () => setMapFullscreen(!mapFullscreen);
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && mapView !== 'game' && mapFullscreen) setMapFullscreen(false);
+});
+function selectedGameMapPoint() {
+  const target = readoutTarget();
+  return target?.selected ? target.point : null;
+}
+
 const observerStates = {
   '3d': { height: 'photo', customHeight: 30 },
   perspective: { height: 'custom', customHeight: 30 }
@@ -1775,6 +1808,7 @@ function drawTerrainView() {
     if(mapView==='game' && terrainView.game?.active) {
       const game=terrainView.game,ground=gameGround(terrainView,game.position[0],game.position[2]);
       const markedTarget=readoutTarget();
+      $('game-maps').disabled=!selectedGameMapPoint();
       $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
       $('game-goto-target').title=!markedTarget?.selected?'Mark a target first'
         : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Move to the marked target';
@@ -2146,6 +2180,10 @@ $("custom-height-row").onsubmit = event => {
   event.preventDefault();
   if ($("custom-height").checkValidity()) changePhotoObserver("custom", Number($("custom-height").value));
 };
+$('game-maps').onclick=()=>{
+  const point=selectedGameMapPoint();
+  if(point)openMap(point.lat,point.lon);
+};
 $('game-exit').onclick=()=>setMapView(gameReturnView);
 $('game-speed').onchange=()=>{if(terrainView?.game)terrainView.game.speedMultiplier=Number($('game-speed').value);};
 $('game-respawn').onclick=()=>terrainView?.game?.reset();
@@ -2349,6 +2387,7 @@ function labelMapApp() {
   const m = MAP_APPS[mapApp];
   $("r-maps").textContent = `Open in ${m.name}`;
   $("btn-maps").textContent = m.short;
+  $("game-maps").textContent = `Open in ${m.name}`;
   for (const b of $("map-app").querySelectorAll("button"))
     b.classList.toggle("on", b.dataset.a === mapApp);
 }
