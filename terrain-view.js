@@ -657,8 +657,13 @@ class TerrainView {
     gl.drawElements(gl.TRIANGLES,this.indexCount,gl.UNSIGNED_INT,0);
     window.projectAssets?.draw3D(this,{width:w,height:h,dpr});
     if(gameCamera) {
-      const tool=gameLaserTool(this.game,this.model.radius);
-      gl.disable(gl.DEPTH_TEST);
+      const handheld=gameLaserTool(this.game,this.model.radius);
+      let tool=handheld;
+      if(this.game.thirdPerson) {
+        const avatar=gameAvatar(this.game,this.model.radius);
+        tool=new Float32Array(avatar.length+handheld.length);tool.set(avatar);tool.set(handheld,avatar.length);
+        gl.enable(gl.DEPTH_TEST);
+      } else gl.disable(gl.DEPTH_TEST);
       gl.bindBuffer(gl.ARRAY_BUFFER,this.toolBuffer);gl.bufferData(gl.ARRAY_BUFFER,tool,gl.DYNAMIC_DRAW);
       gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
       gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);

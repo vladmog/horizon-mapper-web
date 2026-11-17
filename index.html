@@ -118,6 +118,7 @@
   </div>
   <div id="game-controls" hidden>
     <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status" role="status"></div></div>
+    <button id="game-camera" type="button" aria-label="Use third-person view" aria-pressed="false">3rd person</button>
     <div id="game-reticle" aria-hidden="true"><span></span></div>
     <div id="game-laser-status" role="status">Aim the laser at terrain</div>
     <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
@@ -2070,6 +2071,14 @@ $('game-maps').onclick=()=>{
   if(point)openMap(point.lat,point.lon);
 };
 $('game-exit').onclick=()=>setMapView(gameReturnView);
+$('game-camera').onclick=()=>{
+  const game=terrainView?.game;if(!game?.active)return;
+  game.thirdPerson=!game.thirdPerson;
+  $('game-camera').textContent=game.thirdPerson?'1st person':'3rd person';
+  $('game-camera').setAttribute('aria-label',game.thirdPerson?'Use first-person view':'Use third-person view');
+  $('game-camera').setAttribute('aria-pressed',String(game.thirdPerson));
+  terrainView.dirty=true;MP.dirty=true;
+};
 $('game-speed').oninput=()=>{
   const speed=Number($('game-speed').value);
   if(terrainView?.game)terrainView.game.speedMultiplier=speed;

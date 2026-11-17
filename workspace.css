@@ -2112,3 +2112,7 @@ body.game-mode #view-compass-arrow { inset: 2px 13px; }
   touch-action: none;
 }
 #game-speed-value { font: 10px/1.2 var(--mono); }
+
+.game-header { right: max(112px, calc(env(safe-area-inset-right) + 112px)); }
+#game-camera { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(16px, env(safe-area-inset-top)); min-height: 40px; width: 90px; padding: 8px; }
+@media (max-width:520px) { #game-camera { top: max(10px, env(safe-area-inset-top)); } }

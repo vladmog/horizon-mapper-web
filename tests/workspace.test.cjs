@@ -779,3 +779,29 @@ test("vertical speed slider defaults to 25 and changes movement speed immediatel
   assert.equal(await slider.getAttribute('aria-valuetext'),high+' times normal speed');
   await close(page);
 });
+
+test("top-right camera toggle restores third person without moving the player or laser target", async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();await page.waitForFunction(()=>terrainView.game?.active);
+  const snapshot=()=>page.evaluate(()=>({position:[...terrainView.game.position],eye:terrainView.game.camera().eye,hit:terrainView.game.laser().hit}));
+  const first=await snapshot(),button=page.locator('#game-camera');
+  await button.click();
+  assert.equal(await page.evaluate(()=>terrainView.game.thirdPerson),true);
+  assert.equal(await button.innerText(),'1st person');
+  const third=await snapshot();
+  assert.deepEqual(third.position,first.position);assert.deepEqual(third.hit,first.hit);
+  assert.notDeepEqual(third.eye,first.eye);
+  await page.waitForTimeout(150);await page.screenshot({path:'/tmp/horizon-third-person.png'});
+  for(const size of [{width:320,height:568},{width:844,height:390}]) {
+    await page.setViewportSize(size);
+    const b=await button.boundingBox(),header=await page.locator('.game-header').boundingBox();
+    assert.ok(b.x+b.width<=size.width && b.y+b.height<=size.height);
+    assert.ok(b.x>=size.width-110 && b.y<30);
+    assert.ok(header.x+header.width<=b.x);
+  }
+  await button.click();
+  assert.equal(await page.evaluate(()=>terrainView.game.thirdPerson),false);
+  assert.deepEqual((await snapshot()).eye,first.eye);
+  assert.equal(await button.innerText(),'3rd person');
+  await close(page);
+});
