@@ -1158,6 +1158,9 @@ body.game-mode #view-compass {
 #game-controls button {
   pointer-events: auto;
   touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   background: #262626e8;
   border: 1px solid #999999;
   color: #f2f2f2;
@@ -1869,5 +1872,94 @@ body.game-mode #mp3d {
   body.has-location:not(.map-fullscreen):not(.game-mode) #mp3d {
     height: calc(100dvh - 168px);
     min-height: 180px;
+  }
+}
+
+/* Show both geographic views together on landscape phones. */
+@media (orientation: landscape) and (max-height: 520px) {
+  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+    align-items: start;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) .workspace-heading {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace > .card {
+    margin-bottom: 0;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #card-map {
+    position: relative;
+    grid-column: 1;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #card-horizon {
+    grid-column: 2;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #card-map > .surface-heading {
+    display: flex;
+    min-height: 36px;
+    padding-right: 92px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #map-fullscreen {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-height: 36px;
+    padding: 8px;
+    font-size: 11px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #map-view {
+    width: 100%;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #map-view button {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 5px;
+    font-size: 11px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #map-zoom-row {
+    display: flex;
+    margin-left: 0;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #mp,
+  body.has-location:not(.map-fullscreen):not(.game-mode) #mp3d,
+  body.has-location:not(.map-fullscreen):not(.game-mode) #hz {
+    height: clamp(180px, 40dvh, 460px);
+    min-height: 0;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) .hz-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #hz-readout .btns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #r-clear {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace {
+    gap: 10px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) .surface-heading {
+    min-height: 36px;
+    margin-bottom: 8px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) .surface-heading h2 {
+    font-size: 18px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #mp-meta {
+    display: none;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #map-fullscreen {
+    top: 10px;
+    right: 10px;
+  }
+  body.has-location:not(.map-fullscreen):not(.game-mode) #card-horizon:not(:has(#photo-reference:not([hidden]))) #hz-wrap {
+    margin-top: 58px;
   }
 }
