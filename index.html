@@ -309,37 +309,17 @@ function onOrientation(e) {
 
 /* ─── geolocation ────────────────────────────────────── */
 let watchId = null;
-function startGeo(errorTarget = "gate-err") {
+function startGeo() {
   if (S.locationSource !== "gps") return;
-  const showStatus = message => {
-    $("gate-err").textContent = message;
-    if (errorTarget !== "gate-err") $(errorTarget).textContent = message;
-  };
-  const failed = err => {
-    if (S.locationSource !== "gps") return;
-    S.posErr = err.code === 1
-      ? "Location access is blocked. Allow location for this site in your browser settings, then tap Use my location again."
-      : err.code === 3
-        ? "Location timed out. Tap Use my location to retry, or enter coordinates."
-        : "Location is unavailable. Check location services, or enter coordinates.";
-    showStatus(S.posErr);
-  };
-  S.posErr = null;
-  showStatus("Waiting for your location…");
-  if (!navigator.geolocation) { failed({ code: 2 }); return; }
+  if (!navigator.geolocation) { S.posErr = "Geolocation unsupported"; return; }
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-  try {
-    watchId = navigator.geolocation.watchPosition(
-      p => {
-        if (S.locationSource !== "gps" || S.hold) return;
-        S.pos = p; S.posErr = null;
-        showStatus("");
-        if (S.mapNextFix) { S.mapNextFix = false; mapHorizon(); }
-      },
-      failed,
-      { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }
-    );
-  } catch (err) { failed(err); }
+  watchId = navigator.geolocation.watchPosition(
+    p => { if (S.locationSource === "gps" && !S.hold) { S.pos = p; S.posErr = null; if (S.mapNextFix) { S.mapNextFix = false; mapHorizon(); } } },
+    err => { if (S.locationSource !== "gps") return; S.posErr = err.code === 1
+        ? "Location denied. Settings › Safari › Location → Allow,\nthen reload."
+        : `Location error: ${err.message}`; },
+    { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 }
+  );
 }
 
 /* ─── formatting ─────────────────────────────────────── */
@@ -2284,21 +2264,31 @@ function attach() {
 }
 
 async function enableSensors(errorTarget = "gate-err") {
-  // GPS must start in the tap handler, independently of optional compass access.
-  S.mapNextFix = true;
-  startGeo(errorTarget);
-  attach();
-  keepAwake();
+  const errs = [];
   try {
     const DOE = window.DeviceOrientationEvent;
     if (DOE && typeof DOE.requestPermission === "function") {
-      await DOE.requestPermission();
+      const r = await DOE.requestPermission();
+      if (r !== "granted") errs.push("Motion & Orientation access was denied.");
     }
-  } catch (err) {
-    appDiagnostics.record("orientation.permission.failed", { message: err.message }, "warn");
+    const DME = window.DeviceMotionEvent;
+    if (DME && typeof DME.requestPermission === "function") {
+      await DME.requestPermission().catch(() => {});
+    }
+  } catch (err) { errs.push("Sensor request failed: " + err.message); }
+
+  S.mapNextFix = true;
+  attach();
+  startGeo();
+  keepAwake();
+
+  if (errs.length) {
+    $(errorTarget).textContent = errs.join("\n") +
+      "\n\nEnable Settings › Apps › Safari › Motion & Orientation Access, then reload.";
+  } else {
+    $("gate").classList.add("hidden");
   }
 }
-
 $("gate-btn").onclick = () => enableSensors();
 
 if (!window.isSecureContext) {
