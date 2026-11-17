@@ -1258,7 +1258,7 @@ test('system dark mode keeps controls readable and changes live without losing t
   }
 });
 
-test('Viewpoint enters Walk at the same height and aim without inheriting zoom',async()=>{
+test('Viewpoint enters Walk airborne, preserving higher cameras and aim without inheriting zoom',async()=>{
   for(const size of [{width:390,height:844},{width:844,height:390}])for(const source of ['coordinates','photo'])for(const zoom of [.35,3]) {
     const page=await pageFor(size,true);
     if(source==='coordinates') {
@@ -1296,14 +1296,14 @@ test('Viewpoint enters Walk at the same height and aim without inheriting zoom',
     });
     assert.equal(after.thirdPerson,false);
     for(let i=0;i<3;i++) {
-      const expected=i===1?Math.max(before.eye[i],(before.ground+1.65)/before.radius):before.eye[i];
+      const expected=i===1?Math.max(before.eye[i],(before.ground+30)/before.radius):before.eye[i];
       assert.ok(Math.abs(after.eye[i]-expected)<1e-9,`${source} camera eye axis ${i}`);
       assert.ok(Math.abs(after.forward[i]-before.forward[i])<1e-9,`${source} aim axis ${i}`);
     }
     const normalFov=size.height>size.width ? 60 : 360/Math.PI*Math.atan(size.width/size.height*Math.tan(Math.PI/6));
     assert.ok(Math.abs(after.fov-normalFov)<1e-8,'Walk uses its standard lens');
     assert.ok(Math.abs(after.fov-before.fov)>1,'test must exercise a different Viewpoint zoom');
-    assert.equal(after.flying,before.eye[1]*before.radius>before.ground+1.70);
+    assert.equal(after.flying,true);
     assert.equal(after.requests,before.requests);assert.equal(after.sameProfile,true);
     await page.waitForTimeout(200);
     assert.ok(await page.evaluate(eye=>Math.abs(terrainView.game.camera().eye[1]-eye[1])<1e-9,after.eye),'elevated camera must not fall');
@@ -1409,13 +1409,13 @@ test('Fly to Target and Start preserve initial height above terrain after climbi
   assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
   assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
-  // A fresh session started from Map uses its own ground-level starting height.
+  // A fresh session started from Map must also start and arrive airborne.
   await page.locator('#game-exit').click();await page.locator('[data-v="2d"]').click();await page.locator('#map-game').click();
   await page.waitForFunction(()=>terrainView.game.active && !document.getElementById('game-target').disabled);
   await page.locator('#game-target').click();await page.locator('#game-goto-target').click();
   await page.waitForFunction(()=>!terrainView.game.flight);
-  assert.ok(Math.abs(await height()-1.65)<1e-6);
-  assert.equal(await page.evaluate(()=>terrainView.game.flying),false);
+  assert.ok(Math.abs(await height()-30)<1e-6);
+  assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
   await close(page);
 });
 
@@ -1616,4 +1616,54 @@ test('Walk search handles empty results, network failures, sky aiming and late r
   assert.equal(await page.locator('#game-search-card').isVisible(),false,'stale response cannot reopen card');
   assert.equal(await page.locator('#game-search').isDisabled(),false);
   await close(page);
+});
+
+test('every Walk entry starts airborne and both Fly to actions restore its terrain clearance',async()=>{
+  for(const [view,source,height] of [['2d','gps',30],['2d','coordinates',30],['3d','coordinates',30],['perspective','coordinates',1.6],['perspective','coordinates',120],['perspective','photo',1.6]]) {
+    const page=await pageFor({width:390,height:844},true);
+    if(source==='photo') {
+      const png=await page.evaluate(()=>{
+        window.exifr.parse=async()=>({GPSLatitude:48.8584,GPSLongitude:2.2945,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.8584,longitude:2.2945});
+        const c=document.createElement('canvas');c.width=600;c.height=400;return c.toDataURL().split(',')[1];
+      });
+      await page.locator('#photo-file').setInputFiles({name:'airborne.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+      await page.waitForFunction(()=>S.locationSource==='photo' && !HZ.loading && terrainData && mapView==='perspective');
+    } else {
+      if(source==='gps') {
+        await page.locator('#gate-btn').click();await page.waitForFunction(()=>window.__gpsRequests===1);
+        await page.evaluate(()=>window.__gpsSuccess({coords:{latitude:48.8584,longitude:2.2945,accuracy:5},timestamp:Date.now()}));
+        await page.waitForFunction(()=>HZ.P && terrainData && !HZ.loading);
+      } else await mapCoordinates(page);
+      if(view==='perspective')await page.evaluate(height=>{locationCamera.height=height===1.6?'ground':'custom';locationCamera.customHeight=height;},height);
+      if(view!=='2d')await page.locator(`[data-v="${view}"]`).click();
+    }
+    await page.locator('#map-game').click();
+    await page.waitForFunction(()=>terrainView.game?.active);
+    const state=()=>page.evaluate(()=>{
+      const g=terrainView.game,r=g.view.model.radius;
+      return {height:g.aimCamera().eye[1]*r-gameGround(g.view,g.position[0],g.position[2]),flying:g.flying,position:[...g.position]};
+    });
+    const start=await state();
+    assert.ok(start.height>=Math.max(30,height)-1e-6,`${source}/${view}: started at ${start.height} m instead of airborne`);
+    assert.equal(start.flying,true);
+    await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'spawn holds altitude');
+    await page.evaluate(()=>{terrainView.game.tilt=.4;});
+    await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
+    await page.locator('#game-target').click();
+    const selected=await page.evaluate(()=>terrainPoint(terrainData,HZ.pinnedTarget.point));
+    // Explicitly land first so the destination must restore the initial height.
+    await page.evaluate(()=>{
+      const g=terrainView.game;g.position[1]=gameGround(g.view,g.position[0],g.position[2])/g.view.model.radius;
+      g.flying=false;g.velocityY=0;
+    });
+    await page.locator('#game-goto-target').click();await page.waitForFunction(()=>!terrainView.game.flight);
+    const arrival=await state();assert.equal(arrival.flying,true);
+    assert.ok(Math.abs(arrival.height-start.height)<1e-6,'Target restores starting clearance after landing');
+    assert.ok(Math.hypot(arrival.position[0]-selected[0],arrival.position[2]-selected[2])<1e-9);
+    await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
+    const returned=await state();assert.equal(returned.flying,true);assert.deepEqual(returned.position,start.position);
+    await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'return holds altitude');
+    if(view==='2d')await page.screenshot({path:'/tmp/horizon-airborne-map-start.png'});
+    await close(page);
+  }
 });

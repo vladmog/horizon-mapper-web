@@ -57,6 +57,14 @@ All existing map modes and project operations remain available. Selecting device
 
 See `docs/ui-redesign.md` for the acceptance criteria, browser checks, and device-testing limits. Run `npm ci` and `npm test` for the UI suite (install Playwright Chromium first on Linux).
 
+## Walk starting height
+
+Walk starts with its first-person eye at least 30 metres above the rendered
+terrain, whether entered from Map, Terrain, or Viewpoint. A higher Viewpoint
+camera keeps its height and aim, while Walk uses its own lens. Fly to Target
+and Fly to Start restore that session’s initial clearance above local terrain,
+even after manually landing or changing altitude.
+
 ## Walk laser search
 
 Tap **Search** beside **Mark laser** to identify the laser’s current terrain hit.

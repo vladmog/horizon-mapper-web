@@ -97,8 +97,11 @@ class TerrainGame {
     const ground=gameGround(this.view,point[0],point[2]);
     if(ground===null) throw new Error('Map the current location before starting Game.');
     const radius=this.view.model.radius;
-    // Camera altitude is eye level; physics tracks the avatar's feet.
-    this.position=[point[0],Math.max(ground,camera ? camera.eye[1]*radius-1.65 : ground)/radius,point[2]];
+    // Every entry route starts airborne, including Map/Terrain and photos
+    // whose Viewpoint is at ground level. Preserve a higher Viewpoint eye,
+    // but keep at least the default 30 m eye clearance. Physics tracks feet.
+    const eyeAltitude=Math.max(ground+30,camera ? camera.eye[1]*radius : ground+30);
+    this.position=[point[0],(eyeAltitude-1.65)/radius,point[2]];
     this.yaw=camera ? Math.atan2(-camera.forward[0],-camera.forward[2]) : -bearing*Math.PI/180;
     this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
     if(camera)this.thirdPerson=false;
