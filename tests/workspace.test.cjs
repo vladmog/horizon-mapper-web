@@ -69,9 +69,10 @@ async function pageFor(size = { width: 1440, height: 900 }, mapped = false) {
       window.__gpsRequests = 0;
       Object.defineProperty(navigator, "geolocation", {
         value: {
-          watchPosition(success) {
+          watchPosition(success, failure) {
             window.__gpsRequests++;
             window.__gpsSuccess = success;
+            window.__gpsFailure = failure;
             return 1;
           },
           clearWatch() {},
@@ -390,5 +391,42 @@ test("GPS is requested only by the explicit location action and maps its first f
   );
   assert.equal(await page.evaluate(() => S.locationSource), "gps");
   assert.equal(await page.locator("#gate").isVisible(), false);
+  await close(page);
+});
+
+test("GPS proceeds while compass permission is pending, and blocked location is visible and retryable", async () => {
+  const page = await pageFor({ width: 390, height: 844 }, true);
+  await page.evaluate(() => {
+    window.__permissionOrder = [];
+    const watch = navigator.geolocation.watchPosition;
+    navigator.geolocation.watchPosition = (...args) => {
+      window.__permissionOrder.push("gps");
+      return watch(...args);
+    };
+    Object.defineProperty(window, "DeviceOrientationEvent", { configurable: true, value: {
+      requestPermission() {
+        window.__permissionOrder.push("orientation");
+        return new Promise(resolve => { window.__resolveOrientation = resolve; });
+      },
+    }});
+  });
+  await page.locator("#gate-btn").click();
+  assert.deepEqual(await page.evaluate(() => window.__permissionOrder), ["gps", "orientation"]);
+  assert.match(await page.locator("#gate-err").innerText(), /Waiting for your location/);
+  await page.evaluate(() => window.__gpsFailure({ code: 1 }));
+  assert.equal(await page.locator("#gate-err").isVisible(), true);
+  assert.match(await page.locator("#gate-err").innerText(), /Location access is blocked/);
+  await page.evaluate(() => window.__resolveOrientation("denied"));
+  assert.match(await page.locator("#gate-err").innerText(), /Location access is blocked/);
+  await page.locator("#gate-btn").click();
+  assert.equal(await page.evaluate(() => window.__gpsRequests), 2);
+  await page.evaluate(() => window.__gpsFailure({ code: 3 }));
+  assert.match(await page.locator("#gate-err").innerText(), /Location timed out/);
+  await page.evaluate(() => window.__gpsSuccess({
+    coords: { latitude: 48.8584, longitude: 2.2945, accuracy: 5 }, timestamp: Date.now(),
+  }));
+  await page.waitForFunction(() => HZ.P && !HZ.loading && document.getElementById("gate").classList.contains("hidden"));
+  assert.equal(await page.locator("#gate").isVisible(), false);
+  assert.equal(await page.evaluate(() => S.posErr), null);
   await close(page);
 });
