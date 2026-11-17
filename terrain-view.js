@@ -275,7 +275,7 @@ class TerrainView {
       layout(location=1) in vec2 uv;
       layout(location=2) in vec3 tint;
       out vec3 vTint;
-      layout(location=3) in vec3 avatarNormal; flat out vec3 vAvatarNormal;
+      layout(location=3) in vec3 avatarNormal; out vec3 vAvatarNormal; out float vMaterial;
       uniform vec3 eye, right, up, forward;
       uniform float aspect, halfHeight, focal, clipNear, clipFar;
       uniform highp int mode; uniform vec2 viewport; uniform float lineWidth;
@@ -299,15 +299,16 @@ class TerrainView {
           gl_Position.xy += normal*tint.x*lineWidth*2.0/viewport*gl_Position.w;
         }
         gl_PointSize = 10.0;
-        vUV=uv; vPosition=position; vTint=tint; vAvatarNormal=avatarNormal;
+        vUV=uv; vPosition=position; vTint=tint; vAvatarNormal=normalize(avatarNormal); vMaterial=length(avatarNormal);
       }`);
     const fs = compile(gl.FRAGMENT_SHADER, `#version 300 es
       precision highp float;
-      in vec2 vUV; in vec3 vPosition; in vec3 vTint; flat in vec3 vAvatarNormal;
+      in vec2 vUV; in vec3 vPosition; in vec3 vTint; in vec3 vAvatarNormal; in float vMaterial;
       uniform sampler2D imagery;
       uniform highp sampler2DArray detailImagery;
       uniform vec4 detailBounds[24]; uniform int detailCount;
-      uniform highp int mode; uniform vec3 color;
+      uniform highp int mode; uniform vec3 color; uniform vec3 eye;
+      uniform vec3 toolOrigin,toolRight,toolUp,toolForward; uniform float toolRadius;
       out vec4 fragColor;
       void main() {
         if(mode==1 || mode==2 || mode==4) {
@@ -317,7 +318,29 @@ class TerrainView {
         vec3 normal=normalize(cross(dFdx(vPosition),dFdy(vPosition)));
         if(normal.y<0.0) normal=-normal;
         float light=.65+.35*max(0.0,dot(normal,normalize(vec3(-.5,1.,-.4))));
-        if(mode==3) { float avatarLight=.55+.45*max(0.,dot(normalize(vAvatarNormal),normalize(vec3(-.5,1.,-.4))));fragColor=vec4(vTint*avatarLight,1.0);return; }
+        if(mode==3) {
+          vec3 n=normalize(vAvatarNormal),sun=normalize(vec3(-.5,1.,-.4));
+          vec3 viewDir=normalize(eye-vPosition);
+          float diffuse=max(0.,dot(n,sun));
+          float material=floor(vMaterial+.5);
+          vec3 base=vTint;
+          if(material==2. || material==4.) {
+            vec3 offset=(vPosition-toolOrigin)*toolRadius;
+            vec3 p=vec3(dot(offset,toolRight),dot(offset,toolUp),dot(offset,toolForward));
+            // Fixed object-space grain and small scratches, stable while moving.
+            float grain=fract(sin(dot(floor(p*1800.),vec3(12.9898,78.233,37.719)))*43758.5453);
+            float scratch=fract(sin(dot(floor(p*vec3(1300.,170.,65.)),vec3(39.346,11.135,83.155)))*47453.5453);
+            base*=.91+.09*grain;
+            if(material==4.)base=mix(base,vec3(.32,.34,.33),step(.994,scratch)*.45);
+          }
+          vec3 shaded=base*(.30+.12*max(0.,n.y)+.65*diffuse);
+          if(material==2. || material==4.) {
+            float spec=pow(max(0.,dot(n,normalize(sun+viewDir))),material==2.?64.:90.);
+            shaded+=vec3(spec*(material==2.?.65:.32));
+          }
+          if(material==3.)shaded=vTint*(.85+.15*diffuse);
+          fragColor=vec4(shaded,1.);return;
+        }
         vec3 surface=texture(imagery,vUV).rgb;
         vec2 dx=dFdx(vUV), dy=dFdy(vUV);
         vec3 detailColor=vec3(0.); float remaining=1.;
@@ -338,7 +361,7 @@ class TerrainView {
     this.program = gl.createProgram(); gl.attachShader(this.program, vs); gl.attachShader(this.program, fs);
     gl.linkProgram(this.program); gl.deleteShader(vs); gl.deleteShader(fs);
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(this.program));
-    this.uniforms = Object.fromEntries(['eye','right','up','forward','aspect','halfHeight','focal','clipNear','clipFar','viewport','lineWidth','imagery','detailImagery','detailBounds','detailCount','mode','color']
+    this.uniforms = Object.fromEntries(['eye','right','up','forward','aspect','halfHeight','focal','clipNear','clipFar','viewport','lineWidth','imagery','detailImagery','detailBounds','detailCount','mode','color','toolOrigin','toolRight','toolUp','toolForward','toolRadius']
       .map(name => [name, gl.getUniformLocation(this.program, name === 'detailBounds' ? 'detailBounds[0]' : name)]));
     this.vertexBuffer = gl.createBuffer(); this.indexBuffer = gl.createBuffer(); this.markerBuffer = gl.createBuffer(); this.toolBuffer=gl.createBuffer();
     const anisotropy = gl.getExtension('EXT_texture_filter_anisotropic');
@@ -675,6 +698,12 @@ class TerrainView {
         gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
         gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);
         gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,3,gl.FLOAT,false,36,24);
+        const frame=gameLaserFrame(this.game,this.model.radius,firstPerson ? camera.eye : [0,0,0]);
+        gl.uniform3fv(this.uniforms.toolOrigin,frame.origin);
+        gl.uniform3fv(this.uniforms.toolRight,frame.right);
+        gl.uniform3fv(this.uniforms.toolUp,frame.up);
+        gl.uniform3fv(this.uniforms.toolForward,frame.forward);
+        gl.uniform1f(this.uniforms.toolRadius,this.model.radius);
         // Foreground vertices retain the camera-relative precision fix.
         if(firstPerson)gl.uniform3fv(this.uniforms.eye,[0,0,0]);
         gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,tool.length/9);

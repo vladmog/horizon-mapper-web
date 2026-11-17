@@ -108,7 +108,7 @@ test('third-person camera keeps its original distance while avatar and laser sta
     for(const tilt of [-1.2,0,.24,1.2]) {
       game.tilt=tilt;
       const laser=game.laser(),frame=gameLaserFrame(game,radius);
-      assert.ok(laser.origin[0]*radius>.3,'emitter is outside the right side of the head');
+      assert.ok(laser.origin[0]*radius<-.3,'emitter is outside the left side of the head');
       for(const hand of [frame.grip,frame.support]) {
         assert.ok(Math.hypot(...hand.map((v,i)=>v-laser.origin[i]))*radius<.4);
       }

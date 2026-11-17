@@ -1418,3 +1418,41 @@ test('Fly to Target and Start preserve initial height above terrain after climbi
   assert.equal(await page.evaluate(()=>terrainView.game.flying),false);
   await close(page);
 });
+
+test('left-handed Ray Gun retains live directional lighting',async()=>{
+  const page=await pageFor({width:844,height:390},true);await mapCoordinates(page);await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game?.active);
+  const result=await page.evaluate(()=>{
+    const v=terrainView,g=v.game,gl=v.gl,drawElements=gl.drawElements.bind(gl),drawArrays=gl.drawArrays.bind(gl),clearColor=gl.clearColor.bind(gl);
+    // Render only the real weapon pass against black, so terrain cannot make
+    // a static image seem to respond to lighting in this comparison.
+    gl.drawElements=()=>{};
+    gl.drawArrays=(mode,first,count)=>{if(gl.getUniform(v.program,v.uniforms.mode)===3)drawArrays(mode,first,count);};
+    gl.clearColor=()=>clearColor(0,0,0,1);
+    const samples=[];
+    try {
+      for(const yaw of [0,Math.PI]) {
+        g.yaw=yaw;g.tilt=-.2;v.dirty=true;v.render(null,HZ.P.hObs);
+        const pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);
+        gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+        samples.push(pixels);
+      }
+    } finally {gl.drawElements=drawElements;gl.drawArrays=drawArrays;gl.clearColor=clearColor;v.dirty=true;}
+    let visible=0,changed=0;
+    for(let i=0;i<samples[0].length;i+=4) {
+      if(Math.max(...samples[0].subarray(i,i+3))>15) {
+        visible++;
+        if(Math.max(...[0,1,2].map(c=>Math.abs(samples[0][i+c]-samples[1][i+c])))>8)changed++;
+      }
+    }
+    const laser=g.laser(),camera=g.camera();
+    const side=laser.origin.reduce((sum,x,i)=>sum+(x-camera.eye[i])*camera.right[i],0)*v.model.radius;
+    return {visible,changed,side,error:gl.getError(),vertices:gameRayGunMesh(false).length/9};
+  });
+  assert.equal(result.error,0);
+  assert.ok(result.visible>1000);
+  assert.ok(result.changed/result.visible>.15,`${result.changed}/${result.visible} weapon pixels react to turning`);
+  assert.ok(result.side<0,'muzzle and model sit to the left');
+  assert.ok(result.vertices<100000,'keep the model suitable for mobile rendering');
+  await close(page);
+});

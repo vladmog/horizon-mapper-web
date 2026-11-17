@@ -270,9 +270,9 @@ class TerrainGame {
     if(this.laserCache?.key===key && this.laserCache.mesh===this.view.mesh)return this.laserCache.value;
     const aim=gameRaycast(this.view,camera.eye,camera.forward) || camera.eye.map((v,i)=>v+camera.forward[i]*3);
     // First person keeps its foreground tool. Third person holds it at the
-    // right hand, clear of the body; both converge on the same terrain aim point.
-    const depth=this.thirdPerson ? .75 : .6;
-    const side=this.thirdPerson ? .38 : -.22*depth*aspect/camera.focal,down=this.thirdPerson ? -.08 : -.34*depth/camera.focal;
+    // left hand, clear of the body; both converge on the same terrain aim point.
+    const depth=this.thirdPerson ? .75 : .82;
+    const side=this.thirdPerson ? -.38 : -.30*depth*aspect/camera.focal,down=this.thirdPerson ? -.08 : -.40*depth/camera.focal;
     const origin=camera.eye.map((v,i)=>v+(camera.right[i]*side+camera.up[i]*down+camera.forward[i]*depth)/radius);
     const delta=aim.map((v,i)=>v-origin[i]),length=Math.hypot(...delta);
     const direction=delta.map(v=>v/length);
@@ -326,6 +326,7 @@ function gameLaserFrame(game, radius, relativeTo=[0,0,0]) {
   // Subtract in double precision before packing the tiny foreground mesh into
   // float32. World coordinates can otherwise deform the hands as we move.
   const origin=laser.origin.map((v,i)=>v-relativeTo[i]);
+  right=right.map(v=>-v); // left-handed model, including its normals and grip anchors
   const transform=p=>origin.map((v,i)=>v+(right[i]*p[0]+up[i]*p[1]+forward[i]*p[2])/radius);
   return {transform,origin,right,up,forward,grip:transform([0,-.15,-.24]),support:transform([-.065,-.065,-.105])};
 }
@@ -336,12 +337,15 @@ function gameLaserFrame(game, radius, relativeTo=[0,0,0]) {
 const gameRayGunMeshes=new Map();
 function gameRayGunMesh(thirdPerson) {
   if(gameRayGunMeshes.has(thirdPerson))return gameRayGunMeshes.get(thirdPerson);
-  const vertices=[],red=[.68,.055,.035],redLight=[.88,.12,.065],dark=[.065,.075,.075],
-    steel=[.62,.68,.68],brass=[.68,.49,.22],energy=[.3,1,.47];
-  const triangle=(a,b,c,color)=>{
+  const vertices=[],red=[.36,.065,.045],redLight=[.52,.10,.065],dark=[.045,.055,.06],
+    steel=[.40,.45,.47],brass=[.58,.43,.22],energy=[.16,.85,.36];
+  // Normal magnitude carries a material tag (1 matte, 2 metal, 3 energy, 4 paint).
+  const material=color=>color[1]>.8 && color[0]<.4 ? 3 : color[0]>color[1]*2 && color[0]>.2 ? 4
+    : color[0]>.25 && (Math.max(...color)-Math.min(...color)<.2 || color[0]>color[2]*1.5) ? 2 : 1;
+  const triangle=(a,b,c,color,normals=null,kind=material(color))=>{
     const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...n)||1;
-    for(const p of [a,b,c])vertices.push(...p,...color,...n.map(x=>x/length));
+    [a,b,c].forEach((p,i)=>vertices.push(...p,...color,...(normals?.[i] || n.map(x=>x/length)).map(x=>x*kind)));
   };
   const box=(center,size,color)=>{
     const corners=[];
@@ -351,7 +355,7 @@ function gameRayGunMesh(thirdPerson) {
       triangle(corners[face[0]],corners[face[3]],corners[face[2]],color);
     }
   };
-  const cylinder=(a,b,r0,r1,color,sides=24)=>{
+  const cylinder=(a,b,r0,r1,color,sides=48)=>{
     const axis=b.map((v,i)=>v-a[i]),length=Math.hypot(...axis),d=axis.map(v=>v/length);
     const ref=Math.abs(d[1])<.9?[0,1,0]:[1,0,0];
     let u=[d[1]*ref[2]-d[2]*ref[1],d[2]*ref[0]-d[0]*ref[2],d[0]*ref[1]-d[1]*ref[0]];
@@ -361,45 +365,69 @@ function gameRayGunMesh(thirdPerson) {
     for(let i=0;i<sides;i++) {
       const t=i*2*Math.PI/sides,q=(i+1)*2*Math.PI/sides;
       const p0=at(a,r0,t),p1=at(a,r0,q),p2=at(b,r1,t),p3=at(b,r1,q);
-      triangle(p0,p1,p3,color);triangle(p0,p3,p2,color);
+      const normal=t=>{
+        const q=u.map((x,i)=>x*Math.cos(t)+v[i]*Math.sin(t)-d[i]*(r1-r0)/length),l=Math.hypot(...q);
+        return q.map(x=>x/l);
+      };
+      const nt=normal(t),nq=normal(q);
+      triangle(p0,p1,p3,color,[nt,nq,nq]);triangle(p0,p3,p2,color,[nt,nq,nt]);
       triangle(a,p1,p0,color);triangle(b,p2,p3,color);
     }
   };
   const barrel=(z0,z1,r0,r1,color)=>cylinder([0,0,z0],[0,0,z1],r0,r1,color);
   const oval=(center,size,color)=>{
-    const rings=8,sides=16;
+    const rings=12,sides=24;
     const at=(r,s)=>[center[0]+size[0]/2*Math.sin(r*Math.PI/rings)*Math.cos(s*2*Math.PI/sides),
       center[1]+size[1]/2*Math.cos(r*Math.PI/rings),center[2]+size[2]/2*Math.sin(r*Math.PI/rings)*Math.sin(s*2*Math.PI/sides)];
     for(let r=0;r<rings;r++)for(let s=0;s<sides;s++) {
       const a=at(r,s),b=at(r+1,s),c=at(r+1,s+1),d=at(r,s+1);
-      triangle(a,c,b,color);triangle(a,d,c,color);
+      const normal=p=>{
+        const n=p.map((v,i)=>(v-center[i])/(size[i]*size[i])),l=Math.hypot(...n)||1;
+        return n.map(v=>v/l);
+      };
+      triangle(a,c,b,color,[normal(a),normal(c),normal(b)],1);triangle(a,d,c,color,[normal(a),normal(d),normal(c)],1);
     }
   };
-  // Red round receiver, metal rims, side gauge and rear cooling fins.
-  cylinder([-.054,.006,-.263],[.054,.006,-.263],.067,.067,red,32);
+  const tube=(points,r,color)=>{for(let i=1;i<points.length;i++)cylinder(points[i-1],points[i],r,r,color,12);};
+  // Black rear heat sink between thinner red side plates, as seen from behind.
+  cylinder([-.044,.006,-.263],[.044,.006,-.263],.067,.067,dark,64);
+  for(let i=0;i<9;i++) {
+    const y=-.05+i*.014,z=-.263-Math.sqrt(Math.max(0,.067*.067-(y-.006)**2));
+    box([0,y,z-.005],[.092,.005,.018],[.23,.26,.27]);
+    box([0,y+.0028,z-.01],[.09,.001,.01],steel);
+  }
   for(const side of [-1,1]) {
-    cylinder([side*.055,.006,-.263],[side*.06,.006,-.263],.061,.058,brass,32);
-    cylinder([side*.061,.006,-.263],[side*.063,.006,-.263],.051,.051,redLight,32);
-    cylinder([side*.064,.018,-.258],[side*.067,.018,-.258],.026,.026,dark);
-    cylinder([side*.068,.018,-.258],[side*.069,.018,-.258],.021,.021,[.82,.86,.65]);
-    cylinder([side*.070,.018,-.258],[side*.070,.03,-.247],.0015,.0015,red,8);
-    for(let i=0;i<7;i++) {
-      const t=(-.7+i*.37)*Math.PI;
-      cylinder([side*.070,.018+Math.cos(t)*.016,-.258+Math.sin(t)*.016],
-        [side*.070,.018+Math.cos(t)*.019,-.258+Math.sin(t)*.019],.0007,.0007,dark,6);
+    cylinder([side*.044,.006,-.263],[side*.047,.006,-.263],.069,.072,red,64);
+    cylinder([side*.047,.006,-.263],[side*.052,.006,-.263],.072,.068,redLight,64);
+    cylinder([side*.052,.006,-.263],[side*.054,.006,-.263],.064,.064,red,64);
+    // Large graduated green/yellow/red arc and inset needle on the side panel.
+    for(let i=0;i<48;i++) {
+      const t=-1.35+i*2.7/48,q=-1.35+(i+1)*2.7/48;
+      const at=(angle,r)=>[side*.055,.006+Math.sin(angle)*r,-.263+Math.cos(angle)*r];
+      const color=i<16?[.16,.46,.32]:i<36?[.66,.62,.30]:[.52,.19,.12];
+      const a=at(t,.038),b=at(q,.038),c=at(q,.061),d=at(t,.061);
+      triangle(a,b,c,color,null,1);triangle(a,c,d,color,null,1);
+      if(i%2===0)tube([at(t,.055),at(t,i%8===0?.041:.049)],.00055,dark);
     }
-    for(const t of [-.65,0,.65]) {
-      const y=.006+Math.sin(t)*.052,z=-.263-Math.cos(t)*.052;
-      cylinder([side*.034,y,z],[side*.038,y+Math.sin(t)*.024,z-.027],.006,.004,steel,10);
+    cylinder([side*.056,.006,-.263],[side*.063,.006,-.263],.027,.022,red,48);
+    tube([[side*.064,.006,-.263],[side*.064,.033,-.225]],.0013,steel);
+    for(const t of [-2.3,-.8,.8,2.3]) {
+      const y=.006+Math.sin(t)*.06,z=-.263+Math.cos(t)*.06;
+      cylinder([side*.055,y,z],[side*.058,y,z],.003,.003,steel,12);
+      box([side*.0585,y,z],[.001,.001,.004],dark);
     }
   }
+  // Bent protective rails and the raised rear carry loop, not floating spikes.
+  for(const y of [-.042,.048])tube([[-.052,y,-.315],[-.057,y,-.355],[-.047,y,-.365],[.047,y,-.365],[.057,y,-.355],[.052,y,-.315]],.0045,steel);
+  tube([[-.044,.056,-.25],[-.044,.101,-.26],[-.034,.109,-.26],[.034,.109,-.26],[.044,.101,-.26],[.044,.056,-.25]],.0045,steel);
+  box([0,.067,-.228],[.074,.006,.05],red);
   // Energy chamber and longitudinal red rails.
-  barrel(-.24,-.09,.039,.032,dark);
+  barrel(-.235,-.10,.033,.028,energy);
   for(const z of [-.218,-.185,-.152,-.119]) {
-    barrel(z-.004,z+.004,.041,.041,energy);
-    barrel(z-.011,z-.005,.044,.044,steel);
+    barrel(z-.004,z+.004,.035,.035,dark);
+    barrel(z-.006,z-.004,.036,.036,steel);
   }
-  for(const x of [-.029,.029])box([x,.032,-.165],[.013,.014,.15],red);
+  for(const x of [-.03,.03])box([x,-.01,-.165],[.008,.014,.15],red);
   box([0,-.035,-.17],[.067,.018,.13],red);
   barrel(-.105,-.085,.044,.037,redLight);
   // Narrow barrel with three concentric rings, flared muzzle and emitter tip.
@@ -410,8 +438,12 @@ function gameRayGunMesh(thirdPerson) {
   barrel(-.012,-.002,.008,.005,dark);
   barrel(-.002,0,.005,.003,energy); // beam origin is the muzzle tip
   // Raised sight, swept fin and ribbed black pistol grip.
-  box([0,.055,-.17],[.012,.027,.052],red);
-  box([0,.073,-.158],[.006,.01,.025],brass);
+  box([0,.027,-.075],[.006,.065,.006],dark);
+  const sight=[];
+  for(let i=0;i<=48;i++)sight.push([Math.cos(i*Math.PI/24)*.018,.068+Math.sin(i*Math.PI/24)*.018,-.075]);
+  tube(sight,.0018,brass);
+  tube([[-.007,.068,-.075],[.007,.068,-.075]],.0008,redLight);
+  tube([[0,.061,-.075],[0,.075,-.075]],.0008,redLight);
   cylinder([0,-.055,-.26],[0,-.205,-.285],.035,.028,red,12);
   box([0,-.129,-.275],[.052,.137,.048],dark);
   for(let i=0;i<7;i++)box([0,-.073-i*.018,-.248],[.055,.005,.007],steel.map(v=>v*.45));
@@ -423,8 +455,11 @@ function gameRayGunMesh(thirdPerson) {
   oval([0,-.15,-.24],[.11,.12,.12],[.57,.57,.55]);
   oval([-.065,-.065,-.105],[.085,.07,.13],[.57,.57,.55]);
   if(!thirdPerson) {
-    oval([.015,-.27,-.32],[.13,.23,.19],[.21,.22,.23]);
-    oval([-.1,-.13,-.17],[.10,.16,.13],[.21,.22,.23]);
+    // Forearms continue below the camera instead of ending as floating ovals.
+    cylinder([.005,-.19,-.28],[.03,-.50,-.72],.047,.075,[.15,.16,.17],24);
+    cylinder([-.075,-.09,-.14],[-.15,-.38,-.65],.038,.066,[.15,.16,.17],24);
+    cylinder([.005,-.19,-.28],[.008,-.215,-.315],.051,.052,[.22,.23,.24],24);
+    cylinder([-.075,-.09,-.14],[-.079,-.115,-.18],.042,.043,[.22,.23,.24],24);
   }
   const mesh=new Float32Array(vertices);gameRayGunMeshes.set(thirdPerson,mesh);return mesh;
 }
@@ -497,7 +532,7 @@ function gameAvatar(game, radius) {
     const hip=[side*.10,.96,0],shoulder=transform([side*.255,1.46,0]);
     oval([side*.10,.57,0],[.165,.80,.185],pants,hip,side*swing);
     box([side*.10,.09,-.05],[.16,.13,.29],shoe,hip,side*swing);
-    const hand=side===-1?tool.support:tool.grip;
+    const hand=side===-1?tool.grip:tool.support;
     const elbow=shoulder.map((v,i)=>(v+hand[i])/2+([Math.cos(game.yaw)*side*.12,-.18,-Math.sin(game.yaw)*side*.12][i])/radius);
     arm(shoulder,elbow,.075);arm(elbow,hand,.06);
   }
