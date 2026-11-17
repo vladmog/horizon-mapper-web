@@ -1519,7 +1519,9 @@ try {
       observerStates[mode] = state;
   }
 } catch {}
-let photoObserverHeight = observerStates['3d'].height, photoCustomHeight = observerStates['3d'].customHeight;
+// Live and coordinate locations start at ground eye level. Photo projects
+// restore their saved observer settings when the photo is activated.
+let photoObserverHeight = 'ground', photoCustomHeight = 30;
 $("custom-height").value = photoCustomHeight;
 
 function setMapView(view) {
@@ -1606,7 +1608,9 @@ function setMapView(view) {
     button.setAttribute("aria-pressed", String(button.dataset.v === view));
   }
   MP.dirty = true;
-  if (changingMode && (view === '3d' || view === 'perspective')) {
+  // Changing a location's representation must not move its observer and
+  // recalculate the shared skyline. Per-view heights belong to photo projects.
+  if (changingMode && S.locationSource === 'photo' && (view === '3d' || view === 'perspective')) {
     const state = observerStates[view];
     changePhotoObserver(state.height, state.customHeight);
   }
@@ -1849,6 +1853,7 @@ $("use-gps").onclick = () => {
   if (mapView === "perspective") setMapView("2d");
   resetLocationOutput();
   S.locationSource = "gps"; S.photoName = ""; S.pos = null; S.posErr = null;
+  photoObserverHeight = "ground";
   clearPhotoPreview();
   $("hz-bearing-label").textContent = "Correction";
   $("pan-hint").textContent = "Slide the profile to align with a landmark. Live compass panning keeps your correction.";

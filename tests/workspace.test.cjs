@@ -85,6 +85,7 @@ async function pageFor(size = { width: 1440, height: 900 }, mapped = false) {
           }
           postMessage(message) {
             window.__lastRequest = message.options;
+            window.__terrainRequests=(window.__terrainRequests || 0)+1;
             setTimeout(() => {
               if (this.closed) return;
               for (const type of ["result", "terrain"])
@@ -927,5 +928,38 @@ test('photo opens beside an equal Viewpoint pane, with optional horizon and phot
   await page.locator('#coordinate-input').fill('48.8584, 2.2945');await page.locator('#coordinate-submit').click();
   await page.waitForFunction(()=>S.locationSource==='coordinates' && HZ.P && !HZ.loading);
   await assertSplit(page);assert.equal(await page.locator('#comparison-photo').isVisible(),false);
+  await close(page);
+});
+
+
+test('GPS view switching preserves observer height and horizon without another terrain request',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await page.evaluate(()=>localStorage.setItem('terrain.observerStates.v3',JSON.stringify({'3d':{height:'custom',customHeight:400},perspective:{height:'custom',customHeight:900}})));
+  await page.reload();await page.waitForFunction(()=>!!window.HorizonUI);
+  await page.locator('#gate-btn').click();await page.waitForFunction(()=>window.__gpsRequests===1);
+  await page.evaluate(()=>window.__gpsSuccess({coords:{latitude:48.8584,longitude:2.2945,accuracy:5},timestamp:Date.now()}));
+  await page.waitForFunction(()=>HZ.P && terrainData && !HZ.loading);
+  const snapshot=()=>page.evaluate(()=>({requests:window.__terrainRequests,eye:window.__lastRequest.eye,
+    height:photoObserverHeight,custom:photoCustomHeight,heading:curCenter(),fov:HZ.fov,mode:HZ.mode,
+    elevation:HZ.P.hObs,profile:HZ.P.ang.reduce((sum,v,i)=>sum+v*(i+1),0)}));
+  const before=await snapshot();assert.equal(before.height,'ground');assert.equal(before.eye,0);
+  for(const view of ['perspective','2d','3d','perspective','2d']) {
+    await page.locator(`[data-v="${view}"]`).click();
+    await page.waitForFunction(view=>mapView===view && terrainData && !HZ.loading,view);
+    assert.deepEqual(await snapshot(),before,view+' must only change the visual representation');
+  }
+  await page.locator('#map-perspective').click();await page.locator('#map-settings-open').click();
+  await page.locator('#terrain-controls>summary').click();await page.locator('[data-height="custom"]').click();
+  await page.waitForFunction(()=>!HZ.loading && terrainData);
+  // Reopen Settings after the explicit height change completes.
+  await page.locator('#map-settings-open').click();await page.locator('#custom-height').fill('50');
+  await page.locator('#custom-height-row button').click();
+  await page.waitForFunction(()=>window.__lastRequest.eye===50 && !HZ.loading && terrainData);
+  const custom=await snapshot();assert.equal(custom.height,'custom');
+  for(const view of ['2d','3d','perspective']) {
+    await page.locator(`[data-v="${view}"]`).click();
+    await page.waitForFunction(view=>mapView===view && terrainData && !HZ.loading,view);
+    assert.deepEqual(await snapshot(),custom,'explicit custom height is shared across views');
+  }
   await close(page);
 });
