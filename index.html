@@ -143,7 +143,7 @@
     </div>
     <button id="map-fullscreen" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">⛶</button>
   </div>
-  <div id="map-utilities"><button id="map-fit" type="button" title="Fit view">Fit</button><button id="map-settings-open" type="button" aria-label="Map settings" title="Map settings">⋯</button></div>
+  <div id="map-utilities"><button id="map-fit" type="button" title="Fit view">Fit</button></div>
   <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
     <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
 <section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
@@ -1076,6 +1076,38 @@ function mpClamp() {
   MP.cy = clamp(MP.cy, oy - half, oy + half);
 }
 
+// Fit the selected segment into an unobstructed rectangle. Use measured
+// controls so portrait, landscape, fullscreen and larger text all agree.
+function selectionFitFrame(spanX, spanY, maxScale) {
+  const margin=12, bounds={left:margin,top:margin,right:mw-margin,bottom:mh-margin};
+  const canvas=$('mp-wrap').getBoundingClientRect(),obstacles=[];
+  if(canvas.width && canvas.height) {
+    for(const selector of ['#map-view','#map-fullscreen','#map-fit','#mp-wrap .selection-tools','#view-compass','#mp-attribution','#sat-retry']) {
+      const el=document.querySelector(selector),hidden=el.hidden;
+      // Selection actions appear immediately after fitting. Reserve the compass
+      // in Map too, so switching to Terrain keeps exactly the same framing.
+      if(selector==='#mp-wrap .selection-tools' || selector==='#view-compass')el.hidden=false;
+      const rect=el.getBoundingClientRect();el.hidden=hidden;
+      if(!rect.width || !rect.height)continue;
+      const box={left:Math.max(bounds.left,(rect.left-canvas.left)*mw/canvas.width-margin),
+        right:Math.min(bounds.right,(rect.right-canvas.left)*mw/canvas.width+margin),
+        top:Math.max(bounds.top,(rect.top-canvas.top)*mh/canvas.height-margin),
+        bottom:Math.min(bounds.bottom,(rect.bottom-canvas.top)*mh/canvas.height+margin)};
+      if(box.right>box.left && box.bottom>box.top)obstacles.push(box);
+    }
+  }
+  const lefts=[bounds.left,...obstacles.map(b=>b.right)],rights=[bounds.right,...obstacles.map(b=>b.left)];
+  const tops=[bounds.top,...obstacles.map(b=>b.bottom)],bottoms=[bounds.bottom,...obstacles.map(b=>b.top)];
+  let best=null;
+  for(const left of lefts)for(const right of rights)for(const top of tops)for(const bottom of bottoms) {
+    if(right<=left || bottom<=top || obstacles.some(b=>left<b.right && right>b.left && top<b.bottom && bottom>b.top))continue;
+    const width=right-left,height=bottom-top,k=Math.min(width/spanX,height/spanY,maxScale),area=width*height;
+    if(!best || k>best.k+1e-9 || (Math.abs(k-best.k)<1e-9 && area>best.area))best={left,right,top,bottom,k,area};
+  }
+  // A temporarily collapsed surface has no useful fit. A later resize retries.
+  return best || {...bounds,k:Math.min(Math.max(1,mw-24)/spanX,Math.max(1,mh-24)/spanY,maxScale)};
+}
+
 // The only thing that writes the affine.
 function mpAffine() {
   const P = HZ.P;
@@ -1097,13 +1129,17 @@ function mpAffine() {
     const b = binOf(HZ.selAz);
     const point = HZ.pinnedTarget?.bearing === HZ.selAz ? HZ.pinnedTarget.point : layAt(b, Math.min(HZ.selLayer, nLay(b) - 1));
     const px = lon2px(point.lon, MP.z), py = lat2px(point.lat, MP.z);
-    MP.cx = (ox + px) / 2; MP.cy = (oy + py) / 2;
     // Ten percent of the point-to-point span on each side. A small minimum
     // extent also keeps coincident points and perfectly straight axes stable.
     const minSpan = side / (k1 * 1024);
     const width = Math.max(Math.abs(px - ox) * 1.2, minSpan);
     const height = Math.max(Math.abs(py - oy) * 1.2, minSpan);
-    MP.k = Math.min(mw / width, mh / height, k1 * 1024);
+    const frame=selectionFitFrame(width,height,k1*1024);
+    MP.k=frame.k;
+    // The projection remains centred on the canvas. Offset its world centre to
+    // place the source/target midpoint in the free rectangle instead.
+    MP.cx=(ox+px)/2+(mw/2-(frame.left+frame.right)/2)/MP.k;
+    MP.cy=(oy+py)/2+(mh/2-(frame.top+frame.bottom)/2)/MP.k;
   } else {
     // Fit, and the default. Over open water the horizon is a small circle
     // inside a large square -- 9.8 km of dip distance at a standing eye height
@@ -1579,9 +1615,8 @@ function setMapView(view) {
           // Fit the destination pane, not Walk's temporary fullscreen canvas.
           const leavingGame = mapView === 'game';
           if (leavingGame) document.body.classList.remove('game-mode');
-          try { fitMapCanvas($("mp3d").getBoundingClientRect()); }
+          try { fitMapCanvas($("mp3d").getBoundingClientRect()); mpFitSelection(); }
           finally { if (leavingGame) document.body.classList.add('game-mode'); }
-          mpFitSelection();
         } else if (fitMapCanvas()) mpFit();
         terrainView.matchMapView({ ...MP, height: mh });
       }

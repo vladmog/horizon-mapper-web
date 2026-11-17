@@ -1104,7 +1104,7 @@ body.game-mode #card-map {
 }
 body.map-fullscreen:not(.game-mode)
   #card-map
-  > :not(#mp-wrap):not(#map-view-row) {
+  > :not(#mp-wrap):not(#map-view-row):not(#map-utilities) {
   display: none !important;
 }
 body.map-fullscreen:not(.game-mode) #map-view-row {
@@ -2056,11 +2056,10 @@ body.has-location #map-fullscreen { position: static; flex: none; width: 44px; h
 #map-utilities { display: none; }
 body.has-location #map-utilities { display: flex; position: absolute; right: 8px; bottom: 36px; gap: 5px; z-index: 4; }
 #map-utilities button { min-width: 44px; padding: 8px; font-size: 12px; background: #fafafaf2; box-shadow: 0 1px 5px #0002; border-color: #aaa; }
-#map-settings-open { font-size: 22px !important; }
 body.has-location #map-tap-hint, body.has-location #mp-wrap .selection-tools { top: 62px; }
 body.has-location:not(.game-mode) #view-compass { top: 62px; right: 8px; width: 36px; height: 36px; }
 body.has-location:not(.game-mode) #view-compass-arrow { inset: 4px 16px; }
-body.has-location #satellite-status-row { position: absolute; bottom: 36px; left: 8px; right: 110px; margin: 0; z-index: 3; pointer-events: none; }
+body.has-location #satellite-status-row { position: absolute; bottom: 36px; left: 8px; right: 62px; margin: 0; z-index: 3; pointer-events: none; }
 body.has-location #satellite-status-row:has(#sat-status:empty):has(#sat-retry[hidden]) { display: none; }
 body.has-location #sat-status:not(:empty) { background: #fffffff0; border-radius: 4px; padding: 3px 5px; font-size: 10px; }
 body.has-location #sat-retry { pointer-events: auto; }

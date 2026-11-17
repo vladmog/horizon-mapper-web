@@ -114,11 +114,6 @@
   $('comparison-photo').onclick=()=>{document.body.classList.remove('compare-horizon');updateComparison();};
   $('comparison-horizon').onclick=()=>{document.body.classList.add('compare-horizon');updateComparison();};
   $('photo-fit').onclick=()=>photoViewer.reset();
-  $('map-settings-open').onclick=()=>{
-    if(mapFullscreen)setMapFullscreen(false);
-    showPanel('settings');
-    $('map-settings').scrollIntoView({block:'start'});
-  };
   $('map-fit').onclick=()=>{
     if(mapView==='2d')$('mp-zoom').querySelector('[data-k="0"]').click();
     else $('terrain-reset').click();

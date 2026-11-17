@@ -118,6 +118,9 @@ async function noOverflow(page) {
   }));
   assert.ok(overflow.scroll <= overflow.width + 1, JSON.stringify(overflow));
 }
+async function openSettings(page) {
+  await page.locator(page.viewportSize().width<=900?'[data-mobile-panel="settings"]':'[data-panel="settings"]').click();
+}
 async function mapCoordinates(page) {
   await page.locator("#gate-coordinates").click();
   await page.locator("#coordinate-input").fill("48.8584, 2.2945");
@@ -264,7 +267,7 @@ test("coordinates drive mapping, all four views, fullscreen, point selection, an
       .evaluate((el) => el.classList.contains("map-fullscreen")),
     false,
   );
-  await page.locator("#map-settings-open").click();
+  await openSettings(page);
   await page.locator("#terrain-controls>summary").click();
   await page.locator('[data-height="custom"]').click();
   await page.locator("#custom-height").fill("50");
@@ -455,7 +458,7 @@ test("live horizon metrics follow aiming while selected values stay fixed and cl
   assert.equal(await page.locator("#hz-readout").innerText(), selected);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: "/tmp/horizon-live-landscape.png" });
-  await page.locator("#map-settings-open").click();
+  await openSettings(page);
   await page.locator('#mp-zoom [data-k="4"]').click();
   await page.locator("#panel-close").click();
   await page.locator("#mp").scrollIntoViewIfNeeded();
@@ -670,7 +673,7 @@ test("movement stick and swipe aiming work simultaneously without continuous tur
 test("Viewpoint selection uses the horizon fit when returning to Map", async () => {
   const page=await pageFor({width:844,height:390},true);
   await mapCoordinates(page);
-  await page.locator("#map-settings-open").click();
+  await openSettings(page);
   await page.locator('#mp-zoom [data-k="4"]').click();
   await page.locator("#panel-close").click();
   await page.locator('#map-perspective').click();
@@ -883,13 +886,13 @@ test('loaded location uses two equal visible panes with accessible overlay contr
   for(const size of [{width:320,height:568},{width:390,height:844},{width:768,height:1024},{width:844,height:390},{width:901,height:600},{width:1024,height:768},{width:1440,height:900}]) {
     const page=await pageFor(size,true);await mapCoordinates(page);
     await assertSplit(page);
-    for(const selector of ['[data-v="2d"]','[data-v="3d"]','#map-perspective','#map-game','#map-fullscreen','#map-fit','#map-settings-open']) {
+    for(const selector of ['[data-v="2d"]','[data-v="3d"]','#map-perspective','#map-game','#map-fullscreen','#map-fit']) {
       assert.equal(await page.locator(selector).evaluate(el=>{
         const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
       }),true,selector);
     }
     await page.waitForTimeout(150);await page.screenshot({path:`/tmp/horizon-split-location-${size.width}.png`});
-    await page.locator('#map-settings-open').click();
+    await openSettings(page);
     assert.equal(await page.locator('#hz-range').isVisible(),true);
     await page.locator('#mp-zoom [data-k="4"]').click();
     if(size.width<=900)await page.locator('#panel-close').click();
@@ -948,11 +951,11 @@ test('GPS view switching preserves observer height and horizon without another t
     await page.waitForFunction(view=>mapView===view && terrainData && !HZ.loading,view);
     assert.deepEqual(await snapshot(),before,view+' must only change the visual representation');
   }
-  await page.locator('[data-v="3d"]').click();await page.locator('#map-settings-open').click();
+  await page.locator('[data-v="3d"]').click();await openSettings(page);
   await page.locator('#terrain-controls>summary').click();await page.locator('[data-height="custom"]').click();
   await page.waitForFunction(()=>!HZ.loading && terrainData);
   // Reopen Settings after the explicit height change completes.
-  await page.locator('#map-settings-open').click();await page.locator('#custom-height').fill('50');
+  await openSettings(page);await page.locator('#custom-height').fill('50');
   await page.locator('#custom-height-row button').click();
   await page.waitForFunction(()=>window.__lastRequest.eye===50 && !HZ.loading && terrainData);
   const custom=await snapshot();assert.equal(custom.height,'custom');
@@ -978,7 +981,7 @@ test('raised location Viewpoint camera and its height controls leave the horizon
   assert.ok(await cameraHeight()>=30);await unchanged();
   assert.equal(await page.evaluate(()=>locationCamera.customHeight),30);
   await page.waitForTimeout(150);await page.screenshot({path:'/tmp/horizon-raised-viewpoint.png'});
-  await page.locator('#map-settings-open').click();await page.locator('#terrain-controls>summary').click();
+  await openSettings(page);await page.locator('#terrain-controls>summary').click();
   assert.match(await page.locator('#observer-scope').innerText(),/camera only/);
   await page.locator('#custom-height').fill('50');await page.locator('#custom-height-row button').click();
   await page.waitForFunction(()=>locationCamera.customHeight===50 && terrainView.photoCamera.altitude-terrainView.photoSource.ground===50);
@@ -992,5 +995,54 @@ test('raised location Viewpoint camera and its height controls leave the horizon
   await page.waitForFunction(()=>terrainView.photoCamera);
   assert.ok(await cameraHeight()>=50);
   assert.equal(await page.evaluate(()=>photoObserverHeight),'ground');
+  await close(page);
+});
+
+
+test('selected map paths stay clear of overlay controls in every direction and fullscreen',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  assert.equal(await page.locator('#map-settings-open').count(),0);
+  assert.equal(await page.locator('#map-fit').isVisible(),true);
+  async function unobstructed() {
+    const scene=await page.evaluate(()=>{
+      const r=document.getElementById('mp').getBoundingClientRect(),p=readoutTarget().point;
+      return {points:[[mpX(MP.lon0)+r.x,mpY(MP.lat0)+r.y],[mpX(p.lon)+r.x,mpY(p.lat)+r.y]],
+        map:{x:r.x,y:r.y,width:r.width,height:r.height},
+        controls:[...document.querySelectorAll('#map-view button,#map-fullscreen,#map-fit,#mp-wrap .selection-tools button,#sat-retry,#mp-attribution,#view-compass')]
+          .map(el=>{const b=el.getBoundingClientRect();return {id:el.id||el.textContent,x:b.x,y:b.y,width:b.width,height:b.height};})
+          .filter(b=>b.width && b.height)};
+    });
+    const [a,b]=scene.points;
+    for(const point of scene.points)assert.ok(point[0]>scene.map.x+6 && point[0]<scene.map.x+scene.map.width-6 && point[1]>scene.map.y+6 && point[1]<scene.map.y+scene.map.height-6,JSON.stringify(scene));
+    // Independent segment/rectangle clipping: the whole source-target line,
+    // including marker padding, must miss every visible overlay.
+    for(const rect of scene.controls) {
+      let enter=0,leave=1,intersects=true;
+      for(const [axis,lo,hi] of [[0,rect.x-6,rect.x+rect.width+6],[1,rect.y-6,rect.y+rect.height+6]]) {
+        const delta=b[axis]-a[axis];
+        if(Math.abs(delta)<1e-8){if(a[axis]<lo || a[axis]>hi)intersects=false;continue;}
+        const t1=(lo-a[axis])/delta,t2=(hi-a[axis])/delta;
+        enter=Math.max(enter,Math.min(t1,t2));leave=Math.min(leave,Math.max(t1,t2));
+      }
+      assert.ok(!intersects || enter>leave,rect.id+' overlaps selected path '+JSON.stringify(scene.points));
+    }
+  }
+  await page.locator('#hz').click({position:{x:190,y:130}});
+  await page.waitForFunction(()=>HZ.selAz!==null);await unobstructed();
+  for(const size of [{width:320,height:568},{width:390,height:844},{width:844,height:390},{width:1440,height:900}]) {
+    await page.setViewportSize(size);await page.waitForTimeout(100);
+    for(const bearing of [0,45,90,135,180,225,270,315]) {
+      await page.evaluate(bearing=>{
+        const [lat,lon]=destination(MP.lat0,MP.lon0,bearing,800);
+        HZ.selAz=bearing;HZ.selLayer=0;HZ.pinnedTarget={bearing,point:{lat,lon,elev:HZ.P.ground,dist:800,ang:0}};
+        mpFitSelection();updateReadout();
+      },bearing);
+      await unobstructed();
+    }
+    await page.waitForTimeout(100);await page.screenshot({path:`/tmp/horizon-safe-fit-${size.width}.png`});
+    await page.locator('#map-fullscreen').click();await page.waitForTimeout(100);await unobstructed();
+    await page.locator('#map-fit').click();await unobstructed();
+    await page.locator('#map-fullscreen').click();await page.waitForTimeout(100);await unobstructed();
+  }
   await close(page);
 });
