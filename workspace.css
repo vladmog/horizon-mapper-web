@@ -2050,7 +2050,7 @@ body.game-mode .view-tap-hint { display: none; }
 .stick-label { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #eee; pointer-events: none; }
 .game-right { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
 #game-look { position: relative; inset: auto; }
-#game-controls .game-actions { position: static; display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; }
+#game-controls .game-actions { position: static; display: grid; grid-template-columns: repeat(2, 54px); gap: 4px; }
 #game-controls .game-actions button { min-width: 0; min-height: 44px; padding: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-color: #888; border-radius: 7px; }
 #game-controls .game-actions .laser-action { grid-column: span 2; flex-direction: row; gap: 7px; border-color: #df7770; }
 .control-icon { font: 20px/1 system-ui; }
@@ -2062,12 +2062,17 @@ body.game-mode .view-tap-hint { display: none; }
 body.game-mode #view-compass { width: 30px; height: 30px; right: 12px; top: 64px; bottom: auto; }
 body.game-mode #view-compass-arrow { inset: 2px 13px; }
 @media (orientation: landscape) {
-  .game-right { flex-direction: row-reverse; align-items: flex-end; gap: 12px; }
+  .game-right { flex-direction: row; align-items: flex-end; gap: 12px; }
   #game-controls .game-stick { width: 96px; height: 96px; }
 }
 @media (max-width: 359px) {
   #game-controls .game-stick { width: 88px; height: 88px; }
-  #game-controls .game-actions { grid-template-columns: repeat(3, 50px); }
+  #game-controls .game-actions { grid-template-columns: repeat(2, 50px); }
   .game-header { align-items: flex-start; }
   #game-status { max-width: 190px; }
 }
+
+.game-travel { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; background: #262626e8; border: 1px solid #aaa; border-radius: 7px; }
+.travel-label { grid-column: 1 / -1; text-align: center; font-size: 9px; color: #ddd; }
+#game-controls .game-travel button { border: 0; background: #ffffff0a; }
+@media (max-width:359px) { .game-right { gap: 8px; } }

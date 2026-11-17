@@ -165,7 +165,7 @@ if(typeof document!=='undefined') (()=>{
     HZ.radius=Math.min(250000,Math.max(2000,extent*1.1));$('location-source').textContent='Track: '+track.name;
     mapHorizon();await waitMapped();
     if(previousTarget)restoreObserverSelection({...previousTarget,altitude:previousHeight??HZ.P.hObs});
-    state.active=track.id;capture();fitAll();say('Track loaded. Terrain covers up to 250 km from its starting point.');
+    state.active=track.id;capture();fitAll();say('Track loaded. Terrain covers up to 155 miles from its starting point.');
   }
   async function addFiles(files) {
     capture();const errors=[];

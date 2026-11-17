@@ -52,6 +52,40 @@ function gameRaycast(view, origin, direction) {
   return null;
 }
 
+// The ground is linear between grid and triangle crossings. A concave arc
+// above every crossing also clears the entire terrain segment between them.
+function gameFlightPlan(view, from, to) {
+  if (!view.model || !view.mesh || [...from,...to].some(v=>!Number.isFinite(v)) ||
+      [from,to].some(p=>Math.max(Math.abs(p[0]),Math.abs(p[2]))>1))return null;
+  const radius=view.model.radius,delta=to.map((v,i)=>v-from[i]);
+  const distance=Math.hypot(...delta)*radius;
+  if(distance<.01)return null;
+  const cuts=[0,1],n=view.mesh.n;
+  for(const level of [view.model,...(view.model.patches||[])]) {
+    const extent=level.radius/radius,step=2*extent/(n-1);
+    for(const [origin,direction,count,start] of [[from[0],delta[0],n,-extent],
+      [from[2],delta[2],n,-extent],
+      [from[0]+from[2],delta[0]+delta[2],2*n-1,-2*extent]]) {
+      if(Math.abs(direction)<1e-12)continue;
+      for(let i=0;i<count;i++) {
+        const t=(start+i*step-origin)/direction;
+        if(t>0 && t<1)cuts.push(t);
+      }
+    }
+  }
+  const horizontal=Math.hypot(delta[0],delta[2])*radius;
+  const clearance=Math.min(30,Math.max(1.5,horizontal*.015))/radius;
+  let lift=horizontal>.01?Math.min(400,Math.max(1.5,horizontal*.04))/radius:0;
+  for(const t of cuts) {
+    if(t<=0 || t>=1)continue;
+    const ground=gameGround(view,from[0]+delta[0]*t,from[2]+delta[2]*t)/radius;
+    const base=from[1]+delta[1]*t;
+    lift=Math.max(lift,(ground-base)/(4*t*(1-t))+clearance);
+  }
+  const duration=Math.max(.8,Math.min(4,.65+Math.sqrt(distance+2*lift*radius)/45));
+  return {from:[...from],to:[...to],lift,duration};
+}
+
 class TerrainGame {
   constructor(view) {
     this.view=view;this.active=false;this.keys=new Set();this.pointers=new Map();
@@ -65,11 +99,11 @@ class TerrainGame {
     this.position=[point[0],ground/this.view.model.radius,point[2]];
     this.spawn=[...this.position];this.yaw=-bearing*Math.PI/180;this.heading=this.yaw;
     this.tilt=.24;this.phase=0;this.speed=0;this.velocityY=0;
-    this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
+    this.flight=null;this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
-  stop() { this.active=false;this.clearInput();this.lastTime=null; }
+  stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
   clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.lookStick={x:0,y:0};this.resetStick?.();this.resetLookStick?.(); }
-  reset() { this.position=[...this.spawn];this.flying=false;this.velocityY=0;this.clearInput(); }
+  reset() { return this.beginFlight({position:[...this.spawn],flying:false},'start'); }
   targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
     const position=terrainPoint(this.view.model,point);
@@ -80,15 +114,41 @@ class TerrainGame {
   }
   goToTarget(point) {
     const destination=this.targetDestination(point);
-    if(!destination)return false;
-    this.position=destination.position;this.flying=destination.flying;
-    const dx=this.spawn[0]-this.position[0],dz=this.spawn[2]-this.position[2];
-    if(Math.hypot(dx,dz)*this.view.model.radius>.01)
-      this.yaw=Math.atan2(-dx,-dz);
-    this.heading=this.yaw;this.tilt=.24;
-    this.velocityY=0;this.speed=0;this.phase=0;this.lastTime=null;
-    this.clearInput();this.view.dirty=true;
+    return destination ? this.beginFlight(destination,'target') : false;
+  }
+  beginFlight(destination,label) {
+    const plan=gameFlightPlan(this.view,this.position,destination.position);
+    if(!plan) {
+      if(this.flight && Math.hypot(...destination.position.map((v,i)=>v-this.position[i]))*this.view.model.radius<.01) {
+        this.flight=null;this.position=[...destination.position];this.flying=destination.flying;
+        this.velocityY=0;this.speed=0;this.clearInput();this.view.dirty=true;return true;
+      }
+      return false;
+    }
+    const dx=plan.to[0]-plan.from[0],dz=plan.to[2]-plan.from[2];
+    const yaw=Math.hypot(dx,dz)>1e-10?Math.atan2(-dx,-dz):this.yaw;
+    const turn=Math.atan2(Math.sin(yaw-this.yaw),Math.cos(yaw-this.yaw));
+    this.flight={...plan,elapsed:0,label,flying:destination.flying,startYaw:this.yaw,turn,startTilt:this.tilt};
+    this.clearInput();this.velocityY=0;this.speed=0;this.flying=true;this.lastTime=null;
+    this.view.dirty=true;
     return true;
+  }
+  advanceFlight(dt) {
+    const flight=this.flight,old=this.position;
+    flight.elapsed=Math.min(flight.duration,flight.elapsed+dt);
+    const t=flight.elapsed/flight.duration,u=t*t*(3-2*t);
+    this.position=flight.from.map((v,i)=>v+(flight.to[i]-v)*u);
+    this.position[1]+=4*u*(1-u)*flight.lift;
+    if(!flight.manualLook) {
+      const turn=Math.min(1,t/.25),ease=turn*turn*(3-2*turn);
+      this.yaw=flight.startYaw+flight.turn*ease;
+      this.tilt=flight.startTilt+(.12-flight.startTilt)*ease;
+    }
+    this.speed=dt>0?Math.hypot(...this.position.map((v,i)=>v-old[i]))*this.view.model.radius/dt:0;
+    if(t>=1) {
+      this.position=[...flight.to];this.flying=flight.flying;this.flight=null;
+      this.velocityY=0;this.speed=0;this.clearInput();
+    }
   }
   tick(time) {
     if(!this.active || !this.view.model) return;
@@ -102,6 +162,10 @@ class TerrainGame {
     const radius=this.view.model.radius,keys=this.keys;
     this.yaw-=(this.lookStick?.x || 0)*1.6*dt;
     this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt-(this.lookStick?.y || 0)*1.3*dt));
+    if(this.flight) {
+      if(this.pointers.size || Math.hypot(this.lookStick?.x || 0,this.lookStick?.y || 0)>.01)this.flight.manualLook=true;
+      this.advanceFlight(dt);return;
+    }
     let right=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
     let forward=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));
     right+=this.stick?.x || 0;forward+=this.stick?.y || 0;
@@ -110,7 +174,7 @@ class TerrainGame {
     if(!this.flying)rise=0;
     const length=Math.hypot(right,forward,rise);
     if(length>1){right/=length;forward/=length;rise/=length;}
-    const speed=(this.flying ? (keys.has('shift')?24:12) : (keys.has('shift')?5.5:3))*(this.speedMultiplier ?? 1);
+    const speed=(this.flying ? 12 : 3)*(this.speedMultiplier ?? 1);
     const dx=(right*Math.cos(this.yaw)-forward*Math.sin(this.yaw))*speed*dt;
     const dz=(-right*Math.sin(this.yaw)-forward*Math.cos(this.yaw))*speed*dt;
     const x=this.position[0]+dx/radius,z=this.position[2]+dz/radius;
@@ -184,7 +248,7 @@ class TerrainGame {
     canvas.addEventListener('wheel',e=>{
       if(this.active)consume(e);
     },{capture:true,passive:false});
-    const controls=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift','control',' ','e','q']);
+    const controls=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','control',' ','e','q']);
     window.addEventListener('keydown',e=>{
       if(!this.active || /INPUT|TEXTAREA|SELECT|SUMMARY|BUTTON/.test(e.target.tagName))return;
       if(e.key==='Escape'){consume(e);this.onExit?.();return;}
@@ -251,7 +315,7 @@ function gameTarget(game, observerAltitude, refraction=.13, position=game.positi
   const drop=dist*dist*(1-refraction)/(2*6371008.8);
   return {bearing,point:{lat,lon,dist,elev,ang:Math.atan2(elev-observerAltitude-drop,dist)/rad,z:model.z}};
 }
-if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameLaserTool,gameTarget,TerrainGame};
+if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameFlightPlan,gameLaserTool,gameTarget,TerrainGame};
 
 
 // A single captured pointer drives movement independently of camera-look touches.

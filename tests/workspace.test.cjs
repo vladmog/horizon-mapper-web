@@ -581,19 +581,31 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
   assert.ok(marked.every((v,i)=>Math.abs(v-geometry.hit[i])<1e-8));
   for (const size of [{width:390,height:844},{width:320,height:568},{width:568,height:320},{width:844,height:390}]) {
     await page.setViewportSize(size);
-    for(const selector of ['#game-stick','#game-look','#game-target','#game-goto-target','#game-maps','#game-speed','#game-respawn','[data-game-key="shift"]','[data-game-key="e"]','[data-game-key="q"]']) {
+    for(const selector of ['#game-stick','#game-look','#game-target','#game-goto-target','#game-maps','#game-speed','#game-respawn','[data-game-key="e"]','[data-game-key="q"]']) {
       assert.equal(await page.locator(selector).isVisible(),true,selector);
       const r=await page.locator(selector).boundingBox();
       assert.ok(r.x>=0 && r.y>=0 && r.x+r.width<=size.width+1 && r.y+r.height<=size.height+1,selector);
     }
     assert.ok((await page.locator('.game-header').boundingBox()).height<=65);
+    const controls=await page.locator('.game-actions').boundingBox(),look=await page.locator('#game-look').boundingBox();
+    if(size.width>size.height)assert.ok(look.x>=controls.x+controls.width);
+    else assert.ok(look.y>=controls.y+controls.height);
+    const up=await page.locator('[data-game-key="e"]').boundingBox(),down=await page.locator('[data-game-key="q"]').boundingBox();
+    assert.equal(up.x,down.x);assert.ok(up.y+up.height<=down.y);
+    assert.equal(await page.locator('[data-game-key="shift"]').count(),0);
     await page.locator('#game-speed').selectOption('25');
     assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),25);
+    await page.waitForTimeout(150);
     await page.screenshot({path:`/tmp/horizon-first-person-${size.width}.png`});
     await noOverflow(page);
   }
+  const from=await page.evaluate(()=>[...terrainView.game.position]);
   await page.locator('#game-goto-target').click();
+  assert.equal(await page.evaluate(()=>!!terrainView.game.flight),true);
+  await page.waitForFunction(()=>!terrainView.game.flight);
+  assert.notDeepEqual(await page.evaluate(()=>terrainView.game.position),from);
   await page.locator('#game-respawn').click();
+  await page.waitForFunction(()=>!terrainView.game.flight);
   assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
   await page.evaluate(()=>{terrainView.game.tilt=-1.2;terrainView.dirty=true;});
   await page.waitForFunction(()=>document.getElementById('game-target').disabled);
@@ -625,7 +637,7 @@ test("movement and aiming sticks work simultaneously and release on interruption
   await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
   assert.deepEqual(await page.evaluate(()=>terrainView.game.lookStick),{x:0,y:0});
   await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
-  for(const key of ['shift','e','q']) {
+  for(const key of ['e','q']) {
     const button=page.locator('[data-game-key="'+key+'"]'),rect=await button.boundingBox();
     await page.mouse.move(rect.x+rect.width/2,rect.y+rect.height/2);await page.mouse.down();
     assert.equal(await page.evaluate(key=>terrainView.game.keys.has(key),key),true);

@@ -92,7 +92,7 @@
       ><button data-a="gaia">Gaia</button>
     </div>
   </div>
-<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, Shift to sprint, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
+<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
 </aside>
 <main id="workspace" tabindex="-1"><div class="workspace-heading"><div><h1>Explore</h1></div><div class="workspace-status"><span class="pill" id="pill-motion">SENSORS</span><span class="pill" id="pill-gps">GPS</span></div></div><div class="card" id="card-map">
   <div class="surface-heading"><div><h2>Map</h2></div><span id="mp-meta" class="sub"></span></div>
@@ -124,13 +124,14 @@
     <div class="game-right">
       <div class="game-actions" aria-label="Laser and movement controls">
         <button id="game-target" class="laser-action" aria-label="Mark the terrain point hit by the laser"><span class="control-icon" aria-hidden="true">⊕</span><span class="control-label">Mark laser</span></button>
-        <button id="game-goto-target" disabled aria-label="Go to marked target"><span class="control-icon" aria-hidden="true">⌖</span><span class="control-label">Go to</span></button>
-        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Maps</span></button>
-        <button id="game-respawn" aria-label="Return to start"><span class="control-icon" aria-hidden="true">↶</span><span class="control-label">Start</span></button>
-        <label class="game-speed"><span>Speed</span><select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
-        <button data-game-key="shift" aria-label="Hold to sprint"><span class="control-icon" aria-hidden="true">»</span><span class="control-label">Sprint</span></button>
+        <div class="game-travel" role="group" aria-label="Fly to destination"><span class="travel-label">Fly to</span>
+          <button id="game-respawn" aria-label="Fly to start"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Start</span></button>
+          <button id="game-goto-target" disabled aria-label="Fly to marked target"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Target</span></button>
+        </div>
         <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
+        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Maps</span></button>
         <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
+        <label class="game-speed"><span>Speed</span><select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
       </div>
       <div id="game-look" class="game-stick" role="group" aria-label="Look joystick. Drag to aim the laser; farther from center turns faster."><span class="game-stick-thumb"></span><span class="stick-label">Look / aim</span></div>
     </div>
@@ -1620,14 +1621,14 @@ function drawTerrainView() {
       $('game-maps').disabled=!selectedGameMapPoint();
       $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
       $('game-goto-target').title=!markedTarget?.selected?'Mark a target first'
-        : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Move to the marked target';
+        : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Fly to the marked target';
       const laser=game.laser(),laserHit=laser.hit;
       $('game-target').disabled=!laserHit;
       $('game-target').title=laserHit?'Save the terrain point at the laser dot':'Aim the laser at terrain first';
       $('game-reticle').classList.toggle('has-hit',!!laserHit);
       const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*terrainData.radius:0;
-      $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':(distance/1000).toFixed(1)+' km'}`:'No terrain hit — aim lower';
-      $('game-status').textContent=`${game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
+      $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':miles(distance).toFixed(2)+' mi'}`:'No terrain hit — aim lower';
+      $('game-status').textContent=`${game.flight?'Flying to '+game.flight.label:game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
     }
     terrainView.render(readoutTarget(), HZ.P?.hObs ?? (HZ.P ? HZ.P.ground + HZ.P.eye : 0));
     updateViewCompass();
