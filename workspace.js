@@ -118,6 +118,17 @@
     if(mapView==='2d')$('mp-zoom').querySelector('[data-k="0"]').click();
     else $('terrain-reset').click();
   };
+  // Secondary map actions follow the actual mode-bar height, including larger
+  // text. Their top inset is shared in CSS so phone safe areas cannot overlap it.
+  let mapControlsHeight=0;
+  new ResizeObserver(()=>{
+    const height=$('map-view-row').getBoundingClientRect().height;
+    if(!height || height===mapControlsHeight)return;
+    mapControlsHeight=height;
+    $('card-map').style.setProperty('--map-controls-height',height+'px');
+    if(mapView==='2d' && HZ.selAz!=null && MP.zoom===0)mpFitSelection();
+    MP.dirty=true;
+  }).observe($('map-view-row'));
   // Keep the selected source visually distinct from the act of opening its form.
   function update() {
     const status = HZ.loading

@@ -2038,8 +2038,9 @@ body.photo-mode:not(.compare-horizon) #hz-wrap,
 body.photo-mode.compare-horizon #photo-reference { display: none; }
 body.has-location #photo-caption { position: absolute; bottom: 4px; left: 10px; right: 10px; color: #eee; text-shadow: 0 1px 3px #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
 body.has-location #photo-preview-status:not(:empty) { position: absolute; top: 60px; left: 12px; right: 12px; padding: 10px; background: #fff; border-radius: 8px; }
+body.has-location #card-map { --map-controls-top: max(8px,env(safe-area-inset-top)); --map-controls-height: 46px; }
 body.has-location #map-view-row {
-  position: absolute; z-index: 5; top: max(8px,env(safe-area-inset-top)); left: 8px; right: 8px;
+  position: absolute; z-index: 5; top: var(--map-controls-top); left: 8px; right: 8px;
   display: flex; flex-wrap: nowrap; gap: 6px; padding: 0; margin: 0; background: none; pointer-events: none;
 }
 body.has-location #map-view { display: flex; width: auto; flex: 0 1 auto; padding: 2px; gap: 0; border: 1px solid #aaa; border-radius: 10px; background: #fafafaf2; pointer-events: auto; box-shadow: 0 1px 5px #0002; }
@@ -2048,8 +2049,8 @@ body.has-location #map-fullscreen { position: static; flex: none; width: 44px; h
 #map-utilities { display: none; }
 body.has-location #map-utilities { display: flex; position: absolute; right: 8px; bottom: 36px; gap: 5px; z-index: 4; }
 #map-utilities button { min-width: 44px; padding: 8px; font-size: 12px; background: #fafafaf2; box-shadow: 0 1px 5px #0002; border-color: #aaa; }
-body.has-location #map-tap-hint, body.has-location #mp-wrap .selection-tools { top: 62px; }
-body.has-location:not(.game-mode) #view-compass { top: 62px; right: 8px; width: 36px; height: 36px; }
+body.has-location #map-tap-hint, body.has-location #mp-wrap .selection-tools { top: calc(var(--map-controls-top) + var(--map-controls-height) + 8px); }
+body.has-location:not(.game-mode) #view-compass { top: calc(var(--map-controls-top) + var(--map-controls-height) + 8px); right: 8px; width: 36px; height: 36px; }
 body.has-location:not(.game-mode) #view-compass-arrow { inset: 4px 16px; }
 body.has-location #satellite-status-row { position: absolute; bottom: 36px; left: 8px; right: 62px; margin: 0; z-index: 3; pointer-events: none; }
 body.has-location #satellite-status-row:has(#sat-status:empty):has(#sat-retry[hidden]) { display: none; }

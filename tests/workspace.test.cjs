@@ -1061,3 +1061,48 @@ test('photo upload tolerates an older cached UI without updateComparison',async(
   await page.waitForFunction(()=>!document.getElementById('photo-pick').disabled);
   await close(page);
 });
+
+test('mobile Details stays below the mode bar and accepts touch with phone safe areas',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  const cdp=await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+  await page.locator('#hz').click({position:{x:190,y:130}});
+  await page.waitForFunction(()=>HZ.selAz!==null);
+  for(const device of [
+    {width:390,height:844,insets:{top:47,bottom:34,left:0,right:0}},
+    {width:430,height:932,insets:{top:59,bottom:34,left:0,right:0}},
+    {width:320,height:568,insets:{top:20,bottom:0,left:0,right:0}},
+    {width:844,height:390,insets:{top:0,bottom:21,left:47,right:47}},
+  ]) {
+    await page.setViewportSize({width:device.width,height:device.height});
+    await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:device.insets});
+    for(const view of ['2d','3d','perspective'])for(const fullscreen of [false,true]) {
+      await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+      await page.locator(`[data-v="${view}"]`).click();
+      if(fullscreen)await page.locator('#map-fullscreen').click();
+      await page.waitForTimeout(120);
+      const button=page.locator('#mp-wrap [data-selection-details]');
+      const box=await button.boundingBox(),bar=await page.locator('#map-view-row').boundingBox();
+      await page.screenshot({path:`/tmp/horizon-details-${device.width}-${view}-${fullscreen}.png`});
+      assert.ok(box.y>=bar.y+bar.height+6,JSON.stringify({device,view,fullscreen,box,bar}));
+      assert.equal(await button.evaluate(el=>{
+        const b=el.getBoundingClientRect();
+        return [[.1,.1],[.9,.1],[.5,.5],[.1,.9],[.9,.9]].every(([x,y])=>el.contains(document.elementFromPoint(b.x+x*b.width,b.y+y*b.height)));
+      }),true,'Details must be uncovered across its full touch target');
+      const x=box.x+box.width/2,y=box.y+box.height/2;
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y,id:0,radiusX:2,radiusY:2,force:1}]});
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      await page.waitForFunction(()=>{
+        const r=document.getElementById('hz-readout').getBoundingClientRect();
+        return !mapFullscreen && document.activeElement.id==='hz-readout' && r.top<innerHeight && r.bottom>0;
+      });
+    }
+  }
+  await page.evaluate(()=>window.scrollTo({top:0,behavior:'instant'}));
+  await page.addStyleTag({content:'#map-view button { font-size:20px !important; padding-block:22px !important; }'});
+  await page.waitForTimeout(150);
+  const largeBar=await page.locator('#map-view-row').boundingBox();
+  const details=await page.locator('#mp-wrap [data-selection-details]').boundingBox();
+  assert.ok(details.y>=largeBar.y+largeBar.height+6,'Details follows a taller toolbar too');
+  await close(page);
+});
