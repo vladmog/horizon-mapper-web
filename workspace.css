@@ -1963,3 +1963,43 @@ body.game-mode #mp3d {
     margin-top: 58px;
   }
 }
+
+/* Selection actions stay beside the point, above the optional peak list. */
+.selection-tools {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #fafafa;
+}
+.selection-tools button {
+  min-height: 44px;
+  padding: 8px 12px;
+  font-size: 12px;
+  background: transparent;
+  border: 0;
+}
+body.game-mode .selection-tools { display: none; }
+#hz-readout { padding: 12px; margin: 10px 0; }
+.readout-heading { align-items: center; margin-bottom: 10px; }
+#hz-readout #r-clear { margin: 0; min-height: 44px; }
+#r-ll { margin-top: 10px; }
+#peak-panel { margin: 6px 0 !important; }
+#peak-panel > summary { padding: 8px 0; }
+#peak-count { display: inline; }
+#peak-panel > p { margin: 4px 0; padding-bottom: 4px; font-size: 10px; }
+#peak-status:empty { display: none; }
+#peak-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  max-height: 132px;
+  overflow: auto;
+  margin-bottom: 4px;
+}
+#peak-list button { min-height: 44px; padding: 7px 10px; font-size: 11px; }

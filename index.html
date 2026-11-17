@@ -105,7 +105,7 @@
     <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
     <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
   </div>
-  <div id="mp-wrap"><canvas id="mp" aria-label="Satellite map of the current viewpoint. Drag to pan; select a point on the horizon to locate it here."></canvas>
+  <div id="mp-wrap"><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map of the current viewpoint. Drag to pan; select a point on the horizon to locate it here."></canvas>
     <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
 <section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
     <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
@@ -175,19 +175,11 @@
     <figcaption class="sub" id="photo-caption"></figcaption>
     <div class="sub" id="photo-preview-status" role="status"></div>
   </figure>
-  <div id="hz-wrap"><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas></div>
+  <div id="hz-wrap"><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas></div>
   <div class="sub" id="pan-hint" >Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
   <div id="hz-status">Waiting for a GPS fix…</div>
 
-  <details id="peak-panel" style="margin:10px 0">
-    <summary>Named peaks <span id="peak-count" class="sub"></span></summary>
-    <p id="peak-status" class="sub" role="status">Map the horizon to find named peaks.</p>
-    <button id="peak-retry" hidden>Retry peak names</button>
-    <div id="peak-list" style="display:flex;flex-wrap:wrap;gap:7px;max-height:180px;overflow:auto"></div>
-    <p class="sub">Names matched to visible terrain, approximately. Coverage varies.
-      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:var(--accent)">OpenStreetMap contributors</a></p>
-  </details>
-  <div id="hz-readout"><div class="readout-heading"><span class="eyebrow" id="readout-title">Point details</span><span class="sub">Tap a ridge to inspect it</span></div>
+  <div id="hz-readout" tabindex="-1" aria-label="Selected point details"><div class="readout-heading"><span class="eyebrow" id="readout-title">Point details</span><button id="r-clear" type="button">Clear selection</button></div>
     <div id="r-peak" style="font-weight:650;margin-bottom:9px" hidden></div>
     <div class="hz-grid">
       <div><div class="card-label">Bearing</div><div class="val" id="r-az">--</div></div>
@@ -199,9 +191,17 @@
     <div class="btns">
       <button id="r-maps">Open in Maps</button>
       <button id="r-copy">Copy coordinates</button>
-      <button id="r-clear">Clear selection</button>
     </div>
   </div>
+
+  <details id="peak-panel">
+    <summary>Named peaks <span id="peak-count" class="sub"></span></summary>
+    <p id="peak-status" class="sub" role="status">Map the horizon to find named peaks.</p>
+    <button id="peak-retry" hidden>Retry peak names</button>
+    <div id="peak-list"></div>
+    <p class="sub">Approximate matches.
+      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:var(--accent)">OpenStreetMap contributors</a></p>
+  </details>
 
   <details class="profile-options"><summary>Skyline controls <span>Field of view & alignment</span></summary>
   <div class="hz-row">
@@ -904,9 +904,10 @@ function updateReadout() {
   globalThis.projectAssets?.capture();
   const P = HZ.P, ro = $("hz-readout");
   const target = readoutTarget();
-  if (!target) { ro.classList.remove("on"); return; }
+  document.querySelectorAll(".selection-tools").forEach(el => { el.hidden = !target?.selected; });
+  if (!target?.selected) { ro.classList.remove("on"); return; }
   ro.classList.add("on");
-  const { b, L, point: o, selected } = target, nl = nLay(b), d = o.dist;
+  const { b, L, point: o, selected } = target, d = o.dist;
   $("r-clear").hidden = !selected;
   const peak = !HZ.pinnedTarget && (P.namedPeaks || []).find(p => p.bin === b && p.layer === L);
   $("r-peak").hidden = !peak;
@@ -915,12 +916,7 @@ function updateReadout() {
   $("r-el").textContent = (o.ang >= 0 ? "+" : "−") + Math.abs(o.ang).toFixed(2) + "°";
   $("r-d").textContent = miles(d).toFixed(miles(d) >= 10 ? 1 : 2) + " mi";
   $("r-h").textContent = o.elev + " m";
-  // Which line was taken, first: with several ridges under the crosshair the
-  // readout is the only confirmation of which one the tap actually got.
-  const which = nl > 1 && !HZ.pinnedTarget
-    ? (L === 0 ? `skyline of ${nl} lines` : `ridge ${L + 1} of ${nl}`) + "   ·   " : "";
-  $("r-ll").textContent = (selected ? "Selected point · " : "Center skyline · ") + which + `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}` +
-    (o.z === 0 ? "   ·   sea horizon" : `   ·   ${P.tiers.find(t => t.z === o.z) ? P.tiers.find(t => t.z === o.z).mPerPx + " m data" : "z" + o.z}`);
+  $("r-ll").textContent = `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}`;
 }
 
 function movedFar() {
@@ -1946,8 +1942,8 @@ async function loadNamedPeaks(profile) {
     profile.namedPeaks = NamedPeaks.match(profile, peaks);
     $("peak-count").textContent = `(${profile.namedPeaks.length})`;
     $("peak-status").textContent = profile.namedPeaks.length
-      ? "Tap a name to select its ridge. Slide the horizon to explore labels."
-      : "No confident named-peak matches in this terrain. Try a wider range or another viewpoint.";
+      ? ""
+      : "No named peaks found here.";
     for (const peak of profile.namedPeaks) {
       const button = document.createElement("button");
       button.textContent = `${peak.name} · ${mileLabel(peak.dist)}`;
@@ -2072,7 +2068,20 @@ $("hz-nudge-reset").onclick = () => {
   } else HZ.photoBearing = HZ.photoInitialBearing;
   MP.dirty = true;
 };
-$("r-clear").onclick = () => { HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0; mpFitSelection(); };
+function clearSelection() {
+  HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0;
+  mpFitSelection(); updateReadout();
+}
+$("r-clear").onclick = clearSelection;
+for (const button of document.querySelectorAll("[data-selection-clear]")) button.onclick = clearSelection;
+for (const button of document.querySelectorAll("[data-selection-details]")) button.onclick = () => {
+  if (document.body.classList.contains("map-fullscreen")) $("map-fullscreen").click();
+  updateReadout();
+  requestAnimationFrame(() => {
+    $("hz-readout").scrollIntoView({ block: "center" });
+    $("hz-readout").focus({ preventScroll: true });
+  });
+};
 // Actions use the same point as the readout, including the photo center fallback.
 const selPoint = () => readoutTarget()?.point;
 $("r-maps").onclick = () => {

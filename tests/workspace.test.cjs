@@ -392,3 +392,45 @@ test("GPS is requested only by the explicit location action and maps its first f
   assert.equal(await page.locator("#gate").isVisible(), false);
   await close(page);
 });
+
+test("mobile selection clears beside either view and details precede compact peaks", async () => {
+  for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
+    const page = await pageFor(size, true);
+    await mapCoordinates(page);
+    assert.equal(await page.locator("#hz-readout").isVisible(), false);
+    assert.equal(await page.locator(".selection-tools:visible").count(), 0);
+    await page.locator("#hz").click({ position: { x: 120, y: 80 } });
+    await page.waitForFunction(() => HZ.selAz !== null && document.querySelector("#hz-readout.on"));
+    assert.equal(await page.locator(".selection-tools:visible").count(), 2);
+    assert.match(await page.locator("#r-ll").innerText(), /^-?\d+\.\d+, -?\d+\.\d+$/);
+    const order = await page.evaluate(() => ({
+      details: document.querySelector("#hz-readout").getBoundingClientRect().bottom,
+      peaks: document.querySelector("#peak-panel").getBoundingClientRect().top,
+    }));
+    assert.ok(order.details <= order.peaks);
+    await page.locator("#hz-wrap [data-selection-clear]").click();
+    assert.equal(await page.evaluate(() => HZ.selAz), null);
+    assert.equal(await page.locator("#hz-readout").isVisible(), false);
+    await page.locator("#mp").click({ position: { x: 140, y: 120 } });
+    await page.waitForFunction(() => HZ.selAz !== null && !document.querySelector("#mp-wrap .selection-tools").hidden);
+    await page.locator("#mp-wrap [data-selection-clear]").click();
+    assert.equal(await page.evaluate(() => HZ.selAz), null);
+    await page.locator("#map-fullscreen").click();
+    await page.locator("#mp").click({ position: { x: 140, y: 120 } });
+    await page.locator("#mp-wrap [data-selection-details]").click();
+    await page.waitForFunction(() => !mapFullscreen && document.activeElement.id === "hz-readout");
+    await page.locator("#peak-panel summary").click();
+    await page.evaluate(() => {
+      document.querySelector("#peak-status").textContent = "";
+      document.querySelector("#peak-retry").hidden = true;
+      document.querySelector("#peak-list").replaceChildren(...Array.from({ length: 20 }, (_, i) => {
+        const b = document.createElement("button"); b.textContent = `Peak ${i + 1} · 2 mi`; return b;
+      }));
+    });
+    assert.ok((await page.locator("#peak-list").boundingBox()).height <= 132);
+    await noOverflow(page);
+    await page.locator("#card-horizon").scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `/tmp/horizon-selection-${size.width}.png` });
+    await close(page);
+  }
+});
