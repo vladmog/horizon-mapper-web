@@ -150,6 +150,7 @@ if(typeof document!=='undefined') (()=>{
       $('custom-height').value=photoCustomHeight;loadNamedPeaks(HZ.P);state.active=photo.id;
     }
     for(const button of $('hz-fov').querySelectorAll('button'))button.classList.toggle('on',Number(button.dataset.f)===HZ.fov);
+    setMapView('perspective');
     dirty();say('Editing '+photo.name+'. Other visible assets stay on the maps.');
   }
   async function focusTrack(track) {
@@ -185,6 +186,7 @@ if(typeof document!=='undefined') (()=>{
       }catch(e){errors.push(file.name+': '+e.message);}
     }
     say(errors.length?errors.join(' · '):'Assets loaded. Select a photo to edit its own target and viewpoint.');
+    return errors;
   }
   const sceneCache=new Map();
   function scene(mode='full') {
@@ -319,7 +321,22 @@ if(typeof document!=='undefined') (()=>{
     download(new Blob([JSON.stringify(data,(k,v)=>ArrayBuffer.isView(v)?Array.from(v):v)],{type:'application/json'}),(data.name.replace(/[^a-z0-9_-]/gi,'_')||'project')+'.horizon');say('Project exported with its original photos and GPX files.');
   }
   $('asset-add').onclick=()=>$('asset-files').click();$('asset-files').onchange=e=>{const files=[...e.target.files];e.target.value='';run(()=>addFiles(files));};
-  $('photo-file').onchange=e=>{const files=[...e.target.files];e.target.value='';return run(()=>addFiles(files));};
+  $('photo-file').onchange=e=>{
+    const files=[...e.target.files];e.target.value='';
+    if(!files.length)return;
+    closeCoordinateForm();
+    $('photo-status').textContent='';
+    return run(async()=>{
+      const errors=await addFiles(files);
+      if(errors.length){
+        $('photo-status').textContent=errors.join(' · ');
+        window.HorizonUI?.showPanel('location');
+        $('photo-status').setAttribute('tabindex','-1');
+        $('photo-status').focus({preventScroll:true});
+        $('photo-status').scrollIntoView({block:'nearest'});
+      }
+    });
+  };
   const useCoordinates=$('coordinate-form').onsubmit;
   $('coordinate-form').onsubmit=event=>{
     if(state.busy){event.preventDefault();return false;}

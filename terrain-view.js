@@ -171,6 +171,21 @@ function terrainPhotoCamera(model, photo, aspect) {
       : photo.altitude < floor ? 'Eye level (photo altitude below terrain)' : 'Photo altitude' };
 }
 
+// Cast through the tapped pixel against the same terrain triangles we render.
+function terrainViewpointHit(view, x, y, width, height) {
+  if (!view.model || !view.mesh || !(width > 0 && height > 0)) return null;
+  const camera = terrainPhotoCamera(view.model, {
+    ...view.photoSource,
+    pitch: Math.max(-80, Math.min(80, view.photoPitch + (view.photoSource.sensorPitch || 0))),
+    fov: view.photoFov
+  }, width / height);
+  const dx = (2 * x / width - 1) * (width / height) / camera.focal;
+  const dy = (1 - 2 * y / height) / camera.focal;
+  const direction = camera.forward.map((v, i) => v + dx * camera.right[i] + dy * camera.up[i]);
+  const length = Math.hypot(...direction);
+  return gameRaycast(view, camera.eye, direction.map(v => v / length));
+}
+
 // A bounded, camera-centered imagery patch supplies the same XYZ tile level as
 // the 2D view at the orbit focus. The full-area texture remains underneath it.
 function terrainImageryPlan(model, camera, pixelHeight, size = 2048) {
@@ -489,9 +504,9 @@ class TerrainView {
       e.preventDefault(); c.setPointerCapture(e.pointerId);
       this.points.set(e.pointerId,{x:e.clientX,y:e.clientY}); this.anchor=this.gesture();
       if (this.points.size === 1) this.panDrag=!this.photoView && e.pointerType==='mouse' && e.shiftKey;
-      if (!this.photoView && this.points.size === 1 && !this.panDrag) {
-        this.orbitPivot=this.chooseOrbitPivot();
-        this.orbitTap={x:e.clientX,y:e.clientY};
+      if (this.points.size === 1 && !this.panDrag) {
+        if (!this.photoView) this.orbitPivot=this.chooseOrbitPivot();
+        this.orbitTap={x:e.clientX,y:e.clientY,time:Date.now()};
       } else this.orbitTap=null;
     });
     c.addEventListener('pointermove', e => {
@@ -518,11 +533,17 @@ class TerrainView {
     });
     const end=e=>{
       const tap=this.orbitTap; this.orbitTap=null;
-      if(e.type==='pointerup' && tap && !this.photoView && this.points.size===1 &&
+      if(e.type==='pointerup' && tap && this.points.size===1 &&
+        (!this.photoView || Date.now()-tap.time<500) &&
         Math.hypot(e.clientX-tap.x,e.clientY-tap.y)<=6) {
         const r=c.getBoundingClientRect();
-        const hit=terrainOrbitHit(this,this.orbitSource,this.orbitTarget,e.clientX-r.left,e.clientY-r.top,r.width,r.height);
-        if(hit) { this.orbitSelection=hit;this.dirty=true;this.changed(); }
+        if (this.photoView) {
+          const hit=terrainViewpointHit(this,e.clientX-r.left,e.clientY-r.top,r.width,r.height);
+          if(hit) this.selectPoint?.(hit);
+        } else {
+          const hit=terrainOrbitHit(this,this.orbitSource,this.orbitTarget,e.clientX-r.left,e.clientY-r.top,r.width,r.height);
+          if(hit) { this.orbitSelection=hit;this.dirty=true;this.changed(); }
+        }
       }
       this.points.delete(e.pointerId);
       if (!this.points.size) this.panDrag=false;

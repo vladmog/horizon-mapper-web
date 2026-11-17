@@ -105,7 +105,7 @@
     <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
     <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
   </div>
-  <div id="mp-wrap"><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map of the current viewpoint. Drag to pan; select a point on the horizon to locate it here."></canvas>
+  <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
     <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
 <section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
     <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
@@ -175,7 +175,7 @@
     <figcaption class="sub" id="photo-caption"></figcaption>
     <div class="sub" id="photo-preview-status" role="status"></div>
   </figure>
-  <div id="hz-wrap"><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas></div>
+  <div id="hz-wrap"><span id="horizon-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas><div id="live-readout" hidden aria-label="Live aim"><span class="live-label">Live aim</span><div class="live-metrics"><div><span>Bearing</span><strong id="live-az">—</strong></div><div><span>Elevation angle</span><strong id="live-el">—</strong></div><div><span>Distance</span><strong id="live-d">—</strong></div><div><span>Altitude</span><strong id="live-h">—</strong></div></div></div></div>
   <div class="sub" id="pan-hint" >Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
   <div id="hz-status">Waiting for a GPS fix…</div>
 
@@ -905,6 +905,18 @@ function updateReadout() {
   const P = HZ.P, ro = $("hz-readout");
   const target = readoutTarget();
   document.querySelectorAll(".selection-tools").forEach(el => { el.hidden = !target?.selected; });
+  $("map-tap-hint").hidden = !target || target.selected || !["2d", "perspective"].includes(mapView);
+  $("horizon-tap-hint").hidden = !target || target.selected;
+  $("live-readout").hidden = !P;
+  if (P) {
+    const bearing = curCenter(), b = binOf(bearing);
+    const layer = liveViewing() && S.haveTilt ? aimLayer(b) : 0;
+    const point = layAt(b, layer);
+    $("live-az").textContent = bearing.toFixed(1) + "°";
+    $("live-el").textContent = (point.ang >= 0 ? "+" : "−") + Math.abs(point.ang).toFixed(2) + "°";
+    $("live-d").textContent = miles(point.dist).toFixed(miles(point.dist) >= 10 ? 1 : 2) + " mi";
+    $("live-h").textContent = point.elev + " m";
+  }
   if (!target?.selected) { ro.classList.remove("on"); return; }
   ro.classList.add("on");
   const { b, L, point: o, selected } = target, d = o.dist;
@@ -912,10 +924,10 @@ function updateReadout() {
   const peak = !HZ.pinnedTarget && (P.namedPeaks || []).find(p => p.bin === b && p.layer === L);
   $("r-peak").hidden = !peak;
   $("r-peak").textContent = peak ? `${peak.name} · approximate terrain match` : "";
-  $("r-az").textContent = (b * 360 / P.rays).toFixed(1) + "°";
+  $("r-az").textContent = (HZ.pinnedTarget ? HZ.selAz : b * 360 / P.rays).toFixed(1) + "°";
   $("r-el").textContent = (o.ang >= 0 ? "+" : "−") + Math.abs(o.ang).toFixed(2) + "°";
   $("r-d").textContent = miles(d).toFixed(miles(d) >= 10 ? 1 : 2) + " mi";
-  $("r-h").textContent = o.elev + " m";
+  $("r-h").textContent = Math.round(o.elev) + " m";
   $("r-ll").textContent = `${o.lat.toFixed(5)}, ${o.lon.toFixed(5)}`;
 }
 
@@ -1518,6 +1530,12 @@ function setMapView(view) {
           else HZ.photoBearing = bearing;
           MP.dirty = true;
         });
+        terrainView.selectPoint = position => {
+          if (mapView !== "perspective" || !HZ.P) return;
+          const target = gameTarget({ view: terrainView }, HZ.P.hObs, HZ.P.k ?? .13, position);
+          HZ.selAz = target.bearing; HZ.selLayer = 0; HZ.pinnedTarget = target;
+          MP.dirty = true; updateReadout();
+        };
         terrainView.setModel(terrainData);
       }
       if (terrainView.lost) throw new Error("3D graphics are still recovering. Please try again shortly.");
@@ -2070,7 +2088,7 @@ $("hz-nudge-reset").onclick = () => {
 };
 function clearSelection() {
   HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0;
-  mpFitSelection(); updateReadout();
+  MP.dirty = true; updateReadout();
 }
 $("r-clear").onclick = clearSelection;
 for (const button of document.querySelectorAll("[data-selection-clear]")) button.onclick = clearSelection;

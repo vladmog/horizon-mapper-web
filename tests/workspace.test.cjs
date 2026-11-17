@@ -304,7 +304,7 @@ test("photo upload, project saving, reopening, GPX and map provider controls rem
       buffer: Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2Q==", "base64"),
     });
   await page.waitForFunction(
-    () => S.locationSource === "photo" && HZ.P && !HZ.loading,
+    () => S.locationSource === "photo" && HZ.P && !HZ.loading && mapView === "perspective",
   );
   await page.waitForFunction(
     () => !document.getElementById("asset-add").disabled,
@@ -433,4 +433,101 @@ test("mobile selection clears beside either view and details precede compact pea
     await page.screenshot({ path: `/tmp/horizon-selection-${size.width}.png` });
     await close(page);
   }
+});
+
+test("live horizon metrics follow aiming while selected values stay fixed and clearing preserves map framing", async () => {
+  const page = await pageFor({ width: 844, height: 390 }, true);
+  await mapCoordinates(page);
+  await page.waitForFunction(() => !document.getElementById("live-readout").hidden);
+  assert.equal(await page.locator("#map-tap-hint").isVisible(), true);
+  assert.equal(await page.locator("#horizon-tap-hint").isVisible(), true);
+  await page.locator("#hz").click({ position: { x: 150, y: 85 } });
+  await page.waitForFunction(() => HZ.selAz !== null && document.querySelector("#hz-readout.on"));
+  const selected = await page.locator("#hz-readout").innerText();
+  const liveBefore = await page.locator("#live-az").innerText();
+  const canvas = await page.locator("#hz").boundingBox();
+  await page.mouse.move(canvas.x + 180, canvas.y + 85);
+  await page.mouse.down(); await page.mouse.move(canvas.x + 240, canvas.y + 85, { steps: 8 }); await page.mouse.up();
+  await page.waitForFunction(before => document.getElementById("live-az").textContent !== before, liveBefore);
+  assert.equal(await page.locator("#hz-readout").innerText(), selected);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: "/tmp/horizon-live-landscape.png" });
+  await page.locator('#mp-zoom [data-k="4"]').click();
+  await page.locator("#mp").scrollIntoViewIfNeeded();
+  const map = await page.locator("#mp").boundingBox();
+  await page.mouse.move(map.x + 140, map.y + 100);
+  await page.mouse.down(); await page.mouse.move(map.x + 170, map.y + 110, { steps: 6 }); await page.mouse.up();
+  const framing = () => page.evaluate(() => ({ zoom: MP.zoom, k: MP.k, cx: MP.cx, cy: MP.cy }));
+  const before = await framing();
+  await page.locator("#mp-wrap [data-selection-clear]").click();
+  await page.waitForFunction(() => HZ.selAz === null);
+  assert.deepEqual(await framing(), before);
+  assert.equal(await page.locator("#live-readout").isVisible(), true);
+  assert.equal(await page.locator("#hz-readout").isVisible(), false);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.locator("#hz").evaluate(el => el.scrollIntoView({ block: "center" }));
+  await page.screenshot({ path: "/tmp/horizon-live-portrait.png" });
+  await noOverflow(page);
+  await close(page);
+});
+test("a photo without GPS reports the error visibly and preserves the existing terrain", async () => {
+  const page = await pageFor({ width: 390, height: 844 }, true);
+  await mapCoordinates(page);
+  const origin = await page.evaluate(() => ({ lat: HZ.P.lat0, lon: HZ.P.lon0 }));
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6n2sAAAAASUVORK5CYII=", "base64");
+  await page.locator("#photo-file").setInputFiles({ name: "no-location.png", mimeType: "image/png", buffer: png });
+  await page.waitForFunction(() => document.getElementById("photo-status").textContent.includes("No GPS coordinates"));
+  assert.equal(await page.locator("#photo-status").isVisible(), true);
+  assert.equal(await page.locator("#sidebar").getAttribute("aria-modal"), "true");
+  assert.deepEqual(await page.evaluate(() => ({ lat: HZ.P.lat0, lon: HZ.P.lon0 })), origin);
+  assert.equal(await page.evaluate(() => S.locationSource), "coordinates");
+  await page.screenshot({ path: "/tmp/horizon-photo-error.png" });
+  await close(page);
+});
+
+test("Viewpoint taps select the visible terrain without treating drags or sky as a point", async () => {
+  const page = await pageFor({ width: 844, height: 390 }, true);
+  await mapCoordinates(page);
+  await page.locator('#map-perspective').click();
+  await page.waitForFunction(() => mapView === 'perspective' && terrainView.photoCamera);
+  const geometry = await page.evaluate(() => {
+    const view = {
+      model: { radius: 1000, n: 2 },
+      mesh: { n: 2, vertices: new Float32Array(20) },
+      photoSource: { ground: 0, eye: 10, bearing: 0 }, photoPitch: 0, photoFov: 60,
+    };
+    return { ground: terrainViewpointHit(view, 300, 150, 400, 200), sky: terrainViewpointHit(view, 300, 50, 400, 200) };
+  });
+  assert.ok(Math.abs(geometry.ground[0] - .02) < 1e-8);
+  assert.ok(Math.abs(geometry.ground[1]) < 1e-8);
+  assert.ok(Math.abs(geometry.ground[2] + .04 * Math.sqrt(3)) < 1e-8);
+  assert.equal(geometry.sky, null);
+  await page.locator('#mp3d').scrollIntoViewIfNeeded();
+  let rect = await page.locator('#mp3d').boundingBox();
+  await page.locator('#mp3d').click({ position: { x: rect.width / 2, y: rect.height * .8 } });
+  await page.waitForFunction(() => HZ.pinnedTarget !== null && document.querySelector('#hz-readout.on'));
+  const hit = await page.evaluate(() => {
+    const point = terrainPoint(terrainData, HZ.pinnedTarget.point), camera = terrainView.photoCamera;
+    const offset = point.map((v, i) => v - camera.eye[i]);
+    const dot = axis => offset.reduce((sum, v, i) => sum + v * camera[axis][i], 0);
+    return {
+      x: .5 + dot('right') * camera.focal / dot('forward') / 2 / (terrainView.canvas.clientWidth / terrainView.canvas.clientHeight),
+      y: .5 - dot('up') * camera.focal / dot('forward') / 2,
+      error: point[1] * terrainData.radius - gameGround(terrainView, point[0], point[2]),
+    };
+  });
+  assert.ok(Math.abs(hit.x - .5) < .01);
+  assert.ok(Math.abs(hit.y - .8) < .01);
+  assert.ok(Math.abs(hit.error) < .001);
+  const selected = await page.evaluate(() => JSON.stringify(HZ.pinnedTarget));
+  rect = await page.locator('#mp3d').boundingBox();
+  await page.mouse.move(rect.x + rect.width * .6, rect.y + rect.height * .7);
+  await page.mouse.down(); await page.mouse.move(rect.x + rect.width * .7, rect.y + rect.height * .6, { steps: 8 }); await page.mouse.up();
+  assert.equal(await page.evaluate(() => JSON.stringify(HZ.pinnedTarget)), selected);
+  await page.evaluate(() => { terrainView.photoPitch = 80; terrainView.dirty = true; });
+  await page.locator('#mp3d').click({ position: { x: rect.width / 2, y: rect.height / 2 } });
+  assert.equal(await page.evaluate(() => JSON.stringify(HZ.pinnedTarget)), selected);
+  await page.locator('#mp-wrap [data-selection-clear]').click();
+  assert.equal(await page.evaluate(() => HZ.selAz), null);
+  await close(page);
 });
