@@ -317,10 +317,17 @@ function gameLaserFrame(game, radius, relativeTo=[0,0,0]) {
   // float32. World coordinates can otherwise deform the hands as we move.
   const origin=laser.origin.map((v,i)=>v-relativeTo[i]);
   const transform=p=>origin.map((v,i)=>v+(right[i]*p[0]+up[i]*p[1]+forward[i]*p[2])/radius);
-  return {transform,grip:transform([0,-.15,-.24]),support:transform([-.065,-.065,-.105])};
+  return {transform,origin,right,up,forward,grip:transform([0,-.15,-.24]),support:transform([-.065,-.065,-.105])};
 }
-function gameLaserTool(game, radius, relativeTo=[0,0,0]) {
-  const {transform}=gameLaserFrame(game,radius,relativeTo),vertices=[];
+// Procedural classic Ray Gun, modeled from Treyarch's Ray Gun retrospective.
+// https://www.treyarch.com/studio-culture/2023/11/treyarch-ray-gun-retrospective-with-maxwell-porter
+// Local-space mesh. Build once per camera mode; movement only transforms
+// the cached vertices, preserving foreground precision without rebuilding shapes.
+const gameRayGunMeshes=new Map();
+function gameRayGunMesh(thirdPerson) {
+  if(gameRayGunMeshes.has(thirdPerson))return gameRayGunMeshes.get(thirdPerson);
+  const vertices=[],red=[.68,.055,.035],redLight=[.88,.12,.065],dark=[.065,.075,.075],
+    steel=[.62,.68,.68],brass=[.68,.49,.22],energy=[.3,1,.47];
   const triangle=(a,b,c,color)=>{
     const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...n)||1;
@@ -328,31 +335,99 @@ function gameLaserTool(game, radius, relativeTo=[0,0,0]) {
   };
   const box=(center,size,color)=>{
     const corners=[];
-    for(let i=0;i<8;i++)corners.push(transform(center.map((v,j)=>v+((i>>j&1)?1:-1)*size[j]/2)));
+    for(let i=0;i<8;i++)corners.push(center.map((v,j)=>v+((i>>j&1)?1:-1)*size[j]/2));
     for(const face of [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]]) {
       triangle(corners[face[0]],corners[face[2]],corners[face[1]],color);
       triangle(corners[face[0]],corners[face[3]],corners[face[2]],color);
     }
   };
-  const glove=(center,size)=>{
-    const rings=6,sides=10;
-    const at=(r,s)=>transform([center[0]+size[0]/2*Math.sin(r*Math.PI/rings)*Math.cos(s*2*Math.PI/sides),
-      center[1]+size[1]/2*Math.cos(r*Math.PI/rings),center[2]+size[2]/2*Math.sin(r*Math.PI/rings)*Math.sin(s*2*Math.PI/sides)]);
-    for(let r=0;r<rings;r++)for(let s=0;s<sides;s++) {
-      const a=at(r,s),b=at(r+1,s),c=at(r+1,s+1),d=at(r,s+1);
-      triangle(a,c,b,[.57,.57,.55]);triangle(a,d,c,[.57,.57,.55]);
+  const cylinder=(a,b,r0,r1,color,sides=24)=>{
+    const axis=b.map((v,i)=>v-a[i]),length=Math.hypot(...axis),d=axis.map(v=>v/length);
+    const ref=Math.abs(d[1])<.9?[0,1,0]:[1,0,0];
+    let u=[d[1]*ref[2]-d[2]*ref[1],d[2]*ref[0]-d[0]*ref[2],d[0]*ref[1]-d[1]*ref[0]];
+    const norm=Math.hypot(...u);u=u.map(v=>v/norm);
+    const v=[d[1]*u[2]-d[2]*u[1],d[2]*u[0]-d[0]*u[2],d[0]*u[1]-d[1]*u[0]];
+    const at=(p,r,t)=>p.map((x,i)=>x+r*(u[i]*Math.cos(t)+v[i]*Math.sin(t)));
+    for(let i=0;i<sides;i++) {
+      const t=i*2*Math.PI/sides,q=(i+1)*2*Math.PI/sides;
+      const p0=at(a,r0,t),p1=at(a,r0,q),p2=at(b,r1,t),p3=at(b,r1,q);
+      triangle(p0,p1,p3,color);triangle(p0,p3,p2,color);
+      triangle(a,p1,p0,color);triangle(b,p2,p3,color);
     }
   };
-  box([0,-.005,-.12],[.075,.075,.25],[.32,.34,.36]); // barrel
-  box([0,-.04,-.23],[.105,.12,.15],[.18,.19,.20]); // body
-  box([0,-.13,-.25],[.07,.16,.09],[.11,.12,.13]); // grip
-  box([0,.045,-.2],[.025,.025,.055],[.65,.65,.65]); // sight
-  glove([0,-.15,-.24],[.11,.12,.12]); // gripping glove
-  if(!game.thirdPerson)box([.015,-.27,-.32],[.13,.20,.19],[.21,.22,.23]); // first-person sleeve
-  glove([-.065,-.065,-.105],[.085,.07,.13]); // supporting hand
-  if(!game.thirdPerson)box([-.1,-.13,-.17],[.10,.14,.13],[.21,.22,.23]);
-  box([0,.012,.012],[.022,.022,.018],[1,.08,.04]); // lit emitter
-  return new Float32Array(vertices);
+  const barrel=(z0,z1,r0,r1,color)=>cylinder([0,0,z0],[0,0,z1],r0,r1,color);
+  const oval=(center,size,color)=>{
+    const rings=8,sides=16;
+    const at=(r,s)=>[center[0]+size[0]/2*Math.sin(r*Math.PI/rings)*Math.cos(s*2*Math.PI/sides),
+      center[1]+size[1]/2*Math.cos(r*Math.PI/rings),center[2]+size[2]/2*Math.sin(r*Math.PI/rings)*Math.sin(s*2*Math.PI/sides)];
+    for(let r=0;r<rings;r++)for(let s=0;s<sides;s++) {
+      const a=at(r,s),b=at(r+1,s),c=at(r+1,s+1),d=at(r,s+1);
+      triangle(a,c,b,color);triangle(a,d,c,color);
+    }
+  };
+  // Red round receiver, metal rims, side gauge and rear cooling fins.
+  cylinder([-.054,.006,-.263],[.054,.006,-.263],.067,.067,red,32);
+  for(const side of [-1,1]) {
+    cylinder([side*.055,.006,-.263],[side*.06,.006,-.263],.061,.058,brass,32);
+    cylinder([side*.061,.006,-.263],[side*.063,.006,-.263],.051,.051,redLight,32);
+    cylinder([side*.064,.018,-.258],[side*.067,.018,-.258],.026,.026,dark);
+    cylinder([side*.068,.018,-.258],[side*.069,.018,-.258],.021,.021,[.82,.86,.65]);
+    cylinder([side*.070,.018,-.258],[side*.070,.03,-.247],.0015,.0015,red,8);
+    for(let i=0;i<7;i++) {
+      const t=(-.7+i*.37)*Math.PI;
+      cylinder([side*.070,.018+Math.cos(t)*.016,-.258+Math.sin(t)*.016],
+        [side*.070,.018+Math.cos(t)*.019,-.258+Math.sin(t)*.019],.0007,.0007,dark,6);
+    }
+    for(const t of [-.65,0,.65]) {
+      const y=.006+Math.sin(t)*.052,z=-.263-Math.cos(t)*.052;
+      cylinder([side*.034,y,z],[side*.038,y+Math.sin(t)*.024,z-.027],.006,.004,steel,10);
+    }
+  }
+  // Energy chamber and longitudinal red rails.
+  barrel(-.24,-.09,.039,.032,dark);
+  for(const z of [-.218,-.185,-.152,-.119]) {
+    barrel(z-.004,z+.004,.041,.041,energy);
+    barrel(z-.011,z-.005,.044,.044,steel);
+  }
+  for(const x of [-.029,.029])box([x,.032,-.165],[.013,.014,.15],red);
+  box([0,-.035,-.17],[.067,.018,.13],red);
+  barrel(-.105,-.085,.044,.037,redLight);
+  // Narrow barrel with three concentric rings, flared muzzle and emitter tip.
+  barrel(-.087,-.03,.013,.012,steel);
+  for(const z of [-.075,-.056,-.037])barrel(z-.003,z+.003,.025,.025,brass);
+  barrel(-.03,-.012,.029,.016,red);
+  barrel(-.031,-.026,.031,.031,steel);
+  barrel(-.012,-.002,.008,.005,dark);
+  barrel(-.002,0,.005,.003,energy); // beam origin is the muzzle tip
+  // Raised sight, swept fin and ribbed black pistol grip.
+  box([0,.055,-.17],[.012,.027,.052],red);
+  box([0,.073,-.158],[.006,.01,.025],brass);
+  cylinder([0,-.055,-.26],[0,-.205,-.285],.035,.028,red,12);
+  box([0,-.129,-.275],[.052,.137,.048],dark);
+  for(let i=0;i<7;i++)box([0,-.073-i*.018,-.248],[.055,.005,.007],steel.map(v=>v*.45));
+  // Curved trigger guard connects the chamber to the heel of the grip.
+  const guard=[[0,-.04,-.1],[0,-.094,-.12],[0,-.15,-.16],[0,-.2,-.23],[0,-.211,-.279]];
+  for(let i=1;i<guard.length;i++)cylinder(guard[i-1],guard[i],.006,.006,redLight,10);
+  cylinder([0,-.055,-.21],[0,-.095,-.195],.005,.005,steel,10);
+  // Hands use the shared grip/support anchors also used by the third-person arms.
+  oval([0,-.15,-.24],[.11,.12,.12],[.57,.57,.55]);
+  oval([-.065,-.065,-.105],[.085,.07,.13],[.57,.57,.55]);
+  if(!thirdPerson) {
+    oval([.015,-.27,-.32],[.13,.23,.19],[.21,.22,.23]);
+    oval([-.1,-.13,-.17],[.10,.16,.13],[.21,.22,.23]);
+  }
+  const mesh=new Float32Array(vertices);gameRayGunMeshes.set(thirdPerson,mesh);return mesh;
+}
+function gameLaserTool(game, radius, relativeTo=[0,0,0]) {
+  const frame=gameLaserFrame(game,radius,relativeTo),local=gameRayGunMesh(!!game.thirdPerson);
+  const vertices=new Float32Array(local.length);
+  // Avoid per-vertex temporary arrays in the animation loop on phones.
+  for(let i=0;i<local.length;i+=9)for(let axis=0;axis<3;axis++) {
+    vertices[i+axis]=frame.origin[axis]+(frame.right[axis]*local[i]+frame.up[axis]*local[i+1]+frame.forward[axis]*local[i+2])/radius;
+    vertices[i+3+axis]=local[i+3+axis];
+    vertices[i+6+axis]=frame.right[axis]*local[i+6]+frame.up[axis]*local[i+7]+frame.forward[axis]*local[i+8];
+  }
+  return vertices;
 }
 
 // Articulated, 1.78 metre human mesh: head, neck, torso, pelvis, arms,
