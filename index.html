@@ -1635,6 +1635,11 @@ function drawTerrainView() {
       $('game-target').disabled=!laserHit;
       $('game-target').title=laserHit?'Save the terrain point at the laser dot':'Aim the laser at terrain first';
       $('game-reticle').classList.toggle('has-hit',!!laserHit);
+      const aimScreen=game.aimScreenPoint();
+      $('game-reticle').hidden=!aimScreen.visible;
+      $('game-reticle').style.left=aimScreen.x+'%';$('game-reticle').style.top=aimScreen.y+'%';
+      $('game-laser-status').style.left=(aimScreen.visible?Math.max(15,Math.min(85,aimScreen.x)):50)+'%';
+      $('game-laser-status').style.top=aimScreen.visible?`calc(${Math.max(15,aimScreen.y)}% - 35px)`:'45%';
       const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*terrainData.radius:0;
       $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':miles(distance).toFixed(2)+' mi'}`:'No terrain hit — aim lower';
       const relative=game.relativeToStart(),height=Math.round(relative.height);

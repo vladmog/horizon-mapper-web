@@ -789,7 +789,7 @@ test("top-right camera toggle restores third person without moving the player or
   assert.equal(await page.evaluate(()=>terrainView.game.thirdPerson),true);
   assert.equal(await button.innerText(),'1st person');
   const third=await snapshot();
-  assert.deepEqual(third.position,first.position);assert.deepEqual(third.hit,first.hit);
+  assert.deepEqual(third.position,first.position);assert.ok(third.hit.every((v,i)=>Math.abs(v-first.hit[i])<1e-8));
   assert.notDeepEqual(third.eye,first.eye);
   await page.waitForTimeout(150);await page.screenshot({path:'/tmp/horizon-third-person.png'});
   for(const size of [{width:320,height:568},{width:844,height:390}]) {
@@ -827,5 +827,33 @@ test("Walk status reports position from start independently of aim and target",a
   });
   await page.waitForFunction(()=>document.getElementById('game-start-distance').textContent==='0 m');
   assert.equal(await page.locator('#game-start-height').innerText(),'Same elevation');
+  await close(page);
+});
+
+
+test('third-person reticle tracks the laser impact instead of the character head',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();await page.locator('#game-camera').click();
+  for(const size of [{width:390,height:844},{width:844,height:390}]) {
+    await page.setViewportSize(size);
+    for(const yaw of [0,.7]) {
+      await page.evaluate(yaw=>{terrainView.game.yaw=yaw;MP.dirty=true;},yaw);
+      await page.waitForTimeout(100);
+      const projected=await page.evaluate(()=>{
+        const g=terrainView.game,c=g.camera(),p=g.laser().hit;
+        const rect=terrainView.canvas.getBoundingClientRect();
+        const delta=p.map((v,i)=>v-c.eye[i]),dot=v=>delta.reduce((sum,x,i)=>sum+x*v[i],0);
+        const depth=dot(c.forward),scale=rect.height*c.focal/(2*depth);
+        return {x:rect.x+rect.width/2+dot(c.right)*scale,y:rect.y+rect.height/2-dot(c.up)*scale};
+      });
+      const reticle=await page.locator('#game-reticle').boundingBox();
+      assert.ok(Math.abs(reticle.x+reticle.width/2-projected.x)<1);
+      assert.ok(Math.abs(reticle.y+reticle.height/2-projected.y)<1);
+    }
+    await page.waitForTimeout(150);await page.screenshot({path:`/tmp/horizon-third-person-${size.width}.png`});
+  }
+  await page.locator('#game-target').click();
+  const marked=await page.evaluate(()=>({point:terrainPoint(terrainData,HZ.pinnedTarget.point),hit:terrainView.game.laser().hit}));
+  assert.ok(marked.point.every((v,i)=>Math.abs(v-marked.hit[i])<1e-8));
   await close(page);
 });
