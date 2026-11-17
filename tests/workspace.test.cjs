@@ -1355,3 +1355,66 @@ test('first-person gun surfaces occlude correctly regardless of triangle submiss
   }
   await close(page);
 });
+
+test('Fly to Target and Start preserve initial height above terrain after climbing and across hills',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('[data-v="perspective"]').click();await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-target').disabled);
+  const initial=await page.evaluate(()=>{
+    const g=terrainView.game,r=g.view.model.radius,floor=gameGround(g.view,g.position[0],g.position[2]);
+    return {eyeHeight:g.camera().eye[1]*r-floor,ground:floor};
+  });
+  assert.ok(initial.eyeHeight>20);
+  await page.locator('#game-target').click();
+  const target=await page.evaluate(()=>({...HZ.pinnedTarget.point}));
+  // Ascending after initialization must not replace the target arrival height.
+  await page.evaluate(()=>{const g=terrainView.game;g.keys.add('e');g.step(.1);g.keys.clear();});
+  await page.locator('#game-goto-target').click();
+  await page.waitForFunction(()=>!terrainView.game.flight);
+  const height=()=>page.evaluate(()=>{
+    const g=terrainView.game,r=g.view.model.radius;
+    return g.camera().eye[1]*r-gameGround(g.view,g.position[0],g.position[2]);
+  });
+  assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
+  assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
+  assert.deepEqual(await page.evaluate(()=>HZ.pinnedTarget.point),target);
+  await page.waitForTimeout(200);assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
+  const hills=await page.evaluate(()=>{
+    const g=terrainView.game,r=g.view.model.radius,points=[];
+    for(let x=-.8;x<=.8;x+=.2)for(let z=-.8;z<=.8;z+=.2)
+      points.push([x,gameGround(g.view,x,z)/r,z]);
+    points.sort((a,b)=>a[1]-b[1]);
+    return [points[0],points.at(-1)].map(p=>{
+      const target=gameTarget(g,HZ.P.hObs,HZ.P.k,p).point;
+      const started=g.goToTarget(target);let clearance=Infinity,count=0;
+      while(g.flight && count++<1000) {
+        g.advanceFlight(1/120);
+        clearance=Math.min(clearance,g.position[1]*r-gameGround(g.view,g.position[0],g.position[2]));
+      }
+      g.step(1/60);
+      return {started,finished:!g.flight,clearance,ground:gameGround(g.view,g.position[0],g.position[2]),
+        eyeHeight:g.camera().eye[1]*r-gameGround(g.view,g.position[0],g.position[2]),flying:g.flying,
+        horizontalError:Math.hypot(g.position[0]-p[0],g.position[2]-p[2])*r};
+    });
+  });
+  assert.ok(hills[0].ground<initial.ground && hills[1].ground>initial.ground,'exercise lower and higher terrain');
+  for(const result of hills) {
+    assert.ok(result.started && result.finished && result.flying);
+    assert.ok(result.clearance>=-1e-6,'flight clears terrain');
+    assert.ok(result.horizontalError<.001);
+    assert.ok(Math.abs(result.eyeHeight-initial.eyeHeight)<1e-6);
+  }
+  await page.evaluate(()=>{const g=terrainView.game;g.keys.add('e');g.step(.1);g.keys.clear();});
+  await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
+  assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
+  assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
+  assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
+  // A fresh session started from Map uses its own ground-level starting height.
+  await page.locator('#game-exit').click();await page.locator('[data-v="2d"]').click();await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game.active && !document.getElementById('game-target').disabled);
+  await page.locator('#game-target').click();await page.locator('#game-goto-target').click();
+  await page.waitForFunction(()=>!terrainView.game.flight);
+  assert.ok(Math.abs(await height()-1.65)<1e-6);
+  assert.equal(await page.evaluate(()=>terrainView.game.flying),false);
+  await close(page);
+});

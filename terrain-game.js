@@ -103,7 +103,8 @@ class TerrainGame {
     this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
     if(camera)this.thirdPerson=false;
     this.flying=this.position[1]*radius>ground+.05;
-    this.spawn=[...this.position];this.spawnFlying=this.flying;this.heading=this.yaw;
+    this.spawn=[...this.position];this.spawnFlying=this.flying;
+    this.spawnClearance=Math.max(0,this.position[1]*radius-ground);this.heading=this.yaw;
     this.phase=0;this.speed=0;this.velocityY=0;
     window.getSelection?.()?.removeAllRanges();
     this.flight=null;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
@@ -123,8 +124,11 @@ class TerrainGame {
     const position=terrainPoint(this.view.model,point);
     const ground=gameGround(this.view,position[0],position[2]);
     if(ground===null)return null;
-    position[1]=Math.max(ground,point.elev)/this.view.model.radius;
-    return {position,flying:point.elev>ground+.1};
+    // Arrive at the starting clearance above this target's terrain, not at
+    // its surface or at the player's current (possibly manually changed) height.
+    const clearance=this.spawnClearance ?? 0;
+    position[1]=(ground+clearance)/this.view.model.radius;
+    return {position,flying:clearance>.05};
   }
   goToTarget(point) {
     const destination=this.targetDestination(point);
