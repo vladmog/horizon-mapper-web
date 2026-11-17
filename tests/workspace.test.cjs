@@ -1316,3 +1316,39 @@ test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',asy
     await close(page);
   }
 });
+
+test('first-person gun surfaces occlude correctly regardless of triangle submission order',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game?.active);
+  for(const size of [{width:390,height:844},{width:844,height:390}])for(const selected of [false,true]) {
+    await page.setViewportSize(size);await page.waitForTimeout(150);
+    const difference=await page.evaluate(selected=>{
+      const view=terrainView,gl=view.gl,original=gameLaserTool;
+      const read=()=>{
+        view.dirty=true;view.render(selected ? {...readoutTarget(),selected:true} : null,HZ.P.hObs);
+        const pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);
+        gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+        return pixels;
+      };
+      const normal=read();
+      let reversed;
+      try {
+        gameLaserTool=(...args)=>{
+          const mesh=original(...args),reverse=new Float32Array(mesh.length);
+          for(let i=0;i<mesh.length;i+=27)reverse.set(mesh.subarray(i,i+27),mesh.length-i-27);
+          return reverse;
+        };
+        reversed=read();
+      } finally {gameLaserTool=original;read();}
+      let changed=0;
+      for(let i=0;i<normal.length;i+=4)
+        if(Math.max(...[0,1,2].map(c=>Math.abs(normal[i+c]-reversed[i+c])))>12)changed++;
+      return {changed,total:normal.length/4,fraction:changed/(normal.length/4),error:gl.getError()};
+    },selected);
+    assert.equal(difference.error,0);
+    assert.ok(difference.fraction<.001,`${size.width}px: triangle order changed ${difference.changed} pixels (${(difference.fraction*100).toFixed(2)}%)`);
+    await page.screenshot({path:`/tmp/horizon-ray-depth-${size.width}.png`});
+  }
+  await close(page);
+});

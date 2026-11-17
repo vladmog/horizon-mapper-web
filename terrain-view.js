@@ -656,6 +656,7 @@ class TerrainView {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,this.indexBuffer);
     gl.drawElements(gl.TRIANGLES,this.indexCount,gl.UNSIGNED_INT,0);
     window.projectAssets?.draw3D(this,{width:w,height:h,dpr});
+    let drawForeground=null;
     if(gameCamera) {
       const firstPerson=!this.game.thirdPerson;
       const handheld=gameLaserTool(this.game,this.model.radius,firstPerson ? camera.eye : [0,0,0]);
@@ -663,18 +664,24 @@ class TerrainView {
       if(this.game.thirdPerson) {
         const avatar=gameAvatar(this.game,this.model.radius);
         tool=new Float32Array(avatar.length+handheld.length);tool.set(avatar);tool.set(handheld,avatar.length);
+      }
+      const drawTool=()=>{
+        // Draw the first-person tool after the world, with its own depth buffer.
+        // Disabling depth testing made far faces cover near ones, turning the
+        // muzzle and receiver visually inside out. Keep normal self-occlusion.
+        if(firstPerson)gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.enable(gl.DEPTH_TEST);
-      } else gl.disable(gl.DEPTH_TEST);
-      gl.bindBuffer(gl.ARRAY_BUFFER,this.toolBuffer);gl.bufferData(gl.ARRAY_BUFFER,tool,gl.DYNAMIC_DRAW);
-      gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
-      gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);
-      gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,3,gl.FLOAT,false,36,24);
-      // Foreground vertices are already relative to the eye; terrain, the
-      // third-person avatar and laser annotations retain world coordinates.
-      if(firstPerson)gl.uniform3fv(this.uniforms.eye,[0,0,0]);
-      gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,tool.length/9);
-      if(firstPerson)gl.uniform3fv(this.uniforms.eye,camera.eye);
-      gl.disableVertexAttribArray(2);gl.disableVertexAttribArray(3);
+        gl.bindBuffer(gl.ARRAY_BUFFER,this.toolBuffer);gl.bufferData(gl.ARRAY_BUFFER,tool,gl.DYNAMIC_DRAW);
+        gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
+        gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);
+        gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,3,gl.FLOAT,false,36,24);
+        // Foreground vertices retain the camera-relative precision fix.
+        if(firstPerson)gl.uniform3fv(this.uniforms.eye,[0,0,0]);
+        gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,tool.length/9);
+        if(firstPerson)gl.uniform3fv(this.uniforms.eye,camera.eye);
+        gl.disableVertexAttribArray(2);gl.disableVertexAttribArray(3);
+      };
+      if(firstPerson)drawForeground=drawTool;else drawTool();
       const laser=this.game.laser();
       gl.enable(gl.DEPTH_TEST);
       gl.bindBuffer(gl.ARRAY_BUFFER,this.markerBuffer);
@@ -688,7 +695,7 @@ class TerrainView {
       }
       // Selected app targets share the same annotations in Game and orbit views.
       // The live laser remains a preview until the user places a target.
-      if(!target?.selected)return;
+      if(!target?.selected){drawForeground?.();return;}
     }
     // Overlay annotations stay legible even when the simplified surface differs
     // slightly from the exact DEM point used by the profile and readout.
@@ -702,6 +709,7 @@ class TerrainView {
     gl.uniform1i(this.uniforms.mode,2);gl.uniform3fv(this.uniforms.color,[.22,.74,.97]);
     if(!photoCamera && !gameCamera)gl.drawArrays(gl.POINTS,0,1);
     if(target){gl.uniform3fv(this.uniforms.color,target.selected?[1,.44,.44]:[1,.82,.35]);gl.drawArrays(gl.POINTS,1,1);}
+    drawForeground?.();
   }
 }
 if (typeof module !== 'undefined') module.exports={terrainOrbitHit,terrainLODMesh,terrainPerspectiveImageryPlans,terrainMesh,terrainPoint,terrainCameraFromMap,terrainOrbitCamera,terrainCameraBearing,terrainPointVisible,terrainOrbitPivot,terrainImageryPlan,terrainImageryPlans,terrainPhotoCamera,TerrainView};
