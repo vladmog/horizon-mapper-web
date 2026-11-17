@@ -559,3 +559,37 @@ test("Walk keeps a wide horizontal view on portrait phones and its original land
   assert.equal((await camera()).focal, portrait.focal);
   await close(page);
 });
+
+
+test("Walk toolbar stays short on phones and secondary controls remain accessible", async () => {
+  const page = await pageFor({ width: 390, height: 844 }, true);
+  await mapCoordinates(page);
+  await page.locator('#map-game').click();
+  await page.waitForFunction(() => terrainView?.game?.active);
+  for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }, { width: 844, height: 390 }]) {
+    await page.setViewportSize(size);
+    const header = await page.locator('.game-header').boundingBox();
+    assert.ok(header.height <= 80, `Toolbar height: ${header.height}`);
+    assert.equal(await page.locator('#game-respawn').isVisible(), false);
+    assert.equal(await page.locator('#game-target').isVisible(), true);
+    await page.locator('#game-menu summary').click();
+    const menu = await page.locator('.game-menu-body').boundingBox();
+    assert.ok(menu.x >= 0 && menu.x + menu.width <= size.width);
+    assert.ok(menu.y >= 0 && menu.y + menu.height <= size.height);
+    await page.locator('#game-speed').selectOption('25');
+    assert.equal(await page.evaluate(() => terrainView.game.speedMultiplier), 25);
+    await page.locator('#game-respawn').click();
+    assert.equal(await page.locator('#game-menu').getAttribute('open'), null);
+    assert.equal(await page.evaluate(() => mapView), 'game');
+    await noOverflow(page);
+    await page.screenshot({ path: `/tmp/horizon-walk-compact-${size.width}.png` });
+  }
+  await page.locator('#game-menu summary').focus();
+  await page.keyboard.press('Space');
+  assert.equal(await page.locator('#game-respawn').isVisible(), true);
+  assert.equal(await page.evaluate(() => terrainView.game.keys.has(' ')), false);
+  await page.locator('#game-exit').click();
+  assert.equal(await page.locator('#game-menu').getAttribute('open'), null);
+  assert.notEqual(await page.evaluate(() => mapView), 'game');
+  await close(page);
+});

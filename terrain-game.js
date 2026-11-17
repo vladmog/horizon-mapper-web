@@ -189,7 +189,7 @@ class TerrainGame {
     },{capture:true,passive:false});
     const controls=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift','control',' ','e','q']);
     window.addEventListener('keydown',e=>{
-      if(!this.active || /INPUT|TEXTAREA|SELECT/.test(e.target.tagName))return;
+      if(!this.active || /INPUT|TEXTAREA|SELECT|SUMMARY|BUTTON/.test(e.target.tagName))return;
       if(e.key==='Escape'){consume(e);this.onExit?.();return;}
       const key=e.key.toLowerCase();if(!controls.has(key))return;consume(e);
       this.keys.add(key);

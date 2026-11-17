@@ -118,9 +118,18 @@
   </div>
   <div id="game-controls" hidden>
     <div class="game-header">
-    <div class="game-top"><button id="game-exit">Exit walk</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-maps" disabled>Open in Maps</button><button id="game-target">Mark target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
+    <div class="game-top">
+      <button id="game-exit">Exit walk</button>
+      <button id="game-target">Mark target</button>
+      <details id="game-menu"><summary>More</summary><div class="game-menu-body">
+        <button id="game-respawn">Return to start</button>
+        <button id="game-goto-target" disabled>Go to target</button>
+        <button id="game-maps" disabled>Open in Maps</button>
+        <label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+        <p class="game-help">Drag to look. Use the stick to move, or WASD / arrows. Shift: sprint · E / Q: up / down · Esc: exit.</p>
+      </div></details>
+    </div>
     <div id="game-status" role="status"></div>
-    <p class="game-help">WASD / arrows: run · Shift: sprint · Drag: aim laser / look · E / Q: up / down · Esc: exit</p>
     </div>
     <div id="game-stick" class="game-stick" role="group" aria-label="Movement stick. Drag to move; farther from center moves faster. Keyboard: WASD or arrow keys."><span class="game-stick-thumb"></span></div>
     <div class="game-actions"><button data-game-key="shift">Sprint</button><button data-game-key="e" aria-label="Fly up">Ascend</button><button data-game-key="q" aria-label="Fly down">Descend</button></div>
@@ -1564,6 +1573,7 @@ function setMapView(view) {
   updateViewCompass();
   document.body.classList.toggle('game-mode',view==='game');
   $('game-controls').hidden=view!=='game';
+  if(view!=='game') $('game-menu').open=false;
   if(view==='game') $('mp3d').focus();
   terrainView?.cancelGestures();
   $("mp").hidden = view !== "2d"; $("mp3d").hidden = view === "2d";
@@ -2047,6 +2057,8 @@ $('game-maps').onclick=()=>{
   const point=selectedGameMapPoint();
   if(point)openMap(point.lat,point.lon);
 };
+for (const button of $("game-menu").querySelectorAll("button"))
+  button.addEventListener("click", () => { $("game-menu").open = false; });
 $('game-exit').onclick=()=>setMapView(gameReturnView);
 $('game-speed').onchange=()=>{if(terrainView?.game)terrainView.game.speedMultiplier=Number($('game-speed').value);};
 $('game-respawn').onclick=()=>terrainView?.game?.reset();
