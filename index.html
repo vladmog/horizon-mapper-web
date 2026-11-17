@@ -99,7 +99,8 @@
       ><button data-k="2">2&#215;</button><button data-k="4">4&#215;</button>
     </div>
   </div>
-  <details id="terrain-controls" hidden><summary>View settings <span>Observer height & terrain detail</span></summary>
+  <details id="terrain-controls" hidden><summary>View settings <span>Height & terrain detail</span></summary>
+    <p id="observer-scope" class="sub"></p>
     <div class="hz-row" id="photo-observer-row" hidden>
       <label>Observer</label><div class="seg" id="photo-observer" aria-label="Observer height">
         <button data-height="ground" class="on" aria-pressed="true">Ground</button>
@@ -395,15 +396,18 @@ function render(ts) {
   $("map-perspective").disabled = !terrainData;
   $("map-game").disabled = !terrainData || !S.pos;
   $("photo-observer-row").hidden = false;
+  const activeObserver=activeObserverSettings();
+  $('photo-observer-row').querySelector('label').textContent=separateCameraHeight()?'Camera height':'Observer';
+  $('observer-scope').textContent=separateCameraHeight()?'Changes the Viewpoint camera only. The horizon stays at the location’s observer height.':'';
   for (const button of $("photo-observer").querySelectorAll("button")) {
     const hasAltitude = S.locationSource === "photo" && Number.isFinite(S.pos?.coords.altitude);
-    const active = photoObserverHeight === "custom" ? "custom" : photoObserverHeight === "photo" && hasAltitude ? "photo" : "ground";
+    const active = activeObserver.height === "custom" ? "custom" : activeObserver.height === "photo" && hasAltitude ? "photo" : "ground";
     button.hidden = button.dataset.height === "photo" && S.locationSource !== "photo";
     button.disabled = button.dataset.height === "photo" && !hasAltitude;
     button.classList.toggle("on", button.dataset.height === active);
     button.setAttribute("aria-pressed", String(button.dataset.height === active));
   }
-  $("custom-height-row").hidden = photoObserverHeight !== "custom";
+  $("custom-height-row").hidden = activeObserver.height !== "custom";
   updateReadout();
   window.HorizonUI?.update();
   $("hz-nudge").textContent = S.locationSource !== "gps"
@@ -1508,6 +1512,16 @@ const observerStates = {
   '3d': { height: 'photo', customHeight: 30 },
   perspective: { height: 'custom', customHeight: 30 }
 };
+// The elevated preview camera is independent of the location used to compute
+// the horizon. Only explicit camera controls change this preference.
+const locationCamera = {height:'custom',customHeight:30};
+try {
+  const saved=JSON.parse(localStorage.getItem('terrain.locationCamera.v1'));
+  if(saved && ['ground','custom'].includes(saved.height) && Number.isFinite(saved.customHeight) && saved.customHeight>=1.6 && saved.customHeight<=5000)
+    Object.assign(locationCamera,saved);
+} catch {}
+const separateCameraHeight=()=>mapView==='perspective' && S.locationSource!=='photo';
+const activeObserverSettings=()=>separateCameraHeight()?locationCamera:{height:photoObserverHeight,customHeight:photoCustomHeight};
 const terrainModeViews = {};
 let observerRefreshView = null, gameReturnView = "2d", pendingGame = false;
 try {
@@ -1589,6 +1603,7 @@ function setMapView(view) {
     }
   }
   terrainError = ""; mapView = view;
+  if(changingMode)$("custom-height").value=activeObserverSettings().customHeight;
   updateViewCompass();
   document.body.classList.toggle('game-mode',view==='game');
   $('game-controls').hidden=view!=='game';
@@ -1616,6 +1631,13 @@ function setMapView(view) {
   }
 }
 function perspectiveSource() {
+  if(S.locationSource!=='photo') {
+    const meshGround=terrainView?.mesh?gameGround(terrainView,0,0):null;
+    const ground=Math.max(HZ.P?.ground ?? 0,meshGround ?? -Infinity);
+    const eye=locationCamera.height==='custom'?locationCamera.customHeight:1.6;
+    return {ground,eye,observerAltitude:ground+eye,observerSource:`Camera (${eye.toFixed(1)} m above ground)`,
+      sensorPitch:liveViewing() && S.haveTilt?S.aim:0,bearing:curCenter(),fov:HZ.fov};
+  }
   return { ground: HZ.P?.ground, eye: HZ.P?.eye ?? 1.6, altitude: liveViewing() ? undefined : S.pos?.coords.altitude,
     sensorPitch: liveViewing() && S.haveTilt ? S.aim : 0,
     observerAltitude: HZ.P?.hObs, observerSource: observerHeightLabel(),
@@ -2065,9 +2087,17 @@ segPick("hz-fov", "f", v => { HZ.fov = +v; });
 segPick("hz-mode", "m", v => { HZ.mode = v; });
 $("map-view").onclick = e => { const button = e.target.closest("button"); if (button) setMapView(button.dataset.v); };
 segPick("terrain-detail", "d", detail => terrainView?.setDetail(detail));
-function changePhotoObserver(height, customHeight = photoCustomHeight) {
+function changePhotoObserver(height, customHeight = activeObserverSettings().customHeight) {
   if (!["ground", "photo", "custom"].includes(height)) return;
   if (!Number.isFinite(customHeight) || customHeight < 1.6 || customHeight > 5000) return;
+  if(separateCameraHeight()) {
+    if(!['ground','custom'].includes(height))return;
+    Object.assign(locationCamera,{height,customHeight});
+    $('custom-height').value=customHeight;
+    try { localStorage.setItem('terrain.locationCamera.v1',JSON.stringify(locationCamera)); } catch {}
+    terrainView?.setPhotoView(perspectiveSource());MP.dirty=true;
+    return;
+  }
   if (photoObserverHeight === height && photoCustomHeight === customHeight) return;
   photoObserverHeight = height; photoCustomHeight = customHeight;
   $("custom-height").value = photoCustomHeight;
