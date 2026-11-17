@@ -577,6 +577,11 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
   assert.ok(Math.abs((geometry.eye[1]-geometry.position[1])*geometry.radius-1.65)<1e-6);
   assert.ok(geometry.tool.length>0 && geometry.tool.every(Number.isFinite));
   await page.locator('#game-target').click();
+  for(const id of ['game-goto-target','game-maps']) {
+    assert.equal(await page.locator('#'+id).isEnabled(),true);
+    assert.equal(await page.locator('#'+id).evaluate(el=>el.getAnimations().some(a=>a.playState==='running')),true);
+  }
+  assert.equal(await page.locator('#game-respawn').evaluate(el=>el.getAnimations().length),0);
   const marked = await page.evaluate(() => terrainPoint(terrainData,HZ.pinnedTarget.point));
   assert.ok(marked.every((v,i)=>Math.abs(v-geometry.hit[i])<1e-8));
   for (const size of [{width:390,height:844},{width:320,height:568},{width:568,height:320},{width:844,height:390}]) {

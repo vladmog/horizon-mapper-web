@@ -2076,12 +2076,27 @@ $('game-goto-target').onclick=()=>{
   const target=readoutTarget(),game=terrainView?.game;
   if(game?.active && target?.selected && game.goToTarget(target.point))MP.dirty=true;
 };
+let targetActionPulses = [];
+function pulseTargetActions() {
+  targetActionPulses.forEach(animation => animation.cancel());
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const frames = reduced
+    ? [{backgroundColor:'#555555'}, {backgroundColor:'#262626e8'}]
+    : [{boxShadow:'0 0 0 0 #ffffff80',backgroundColor:'#555555'},
+       {boxShadow:'0 0 0 9px #ffffff00',backgroundColor:'#262626e8'}];
+  targetActionPulses = ['game-goto-target','game-maps'].map(id => $(id))
+    .filter(button => !button.disabled)
+    .map(button => button.animate(frames, {duration:reduced?900:700,iterations:reduced?1:2,easing:'ease-out'}));
+}
 $('game-target').onclick=()=>{
   const game=terrainView?.game;if(!game?.active || !HZ.P)return;
   const hit=game.laser().hit;if(!hit)return;
   const target=gameTarget(game,HZ.P.hObs,HZ.P.k ?? .13,hit);
   HZ.selAz=target.bearing;HZ.selLayer=0;HZ.pinnedTarget=target;
   game.targetPlaced=true;mpFitSelection();
+  $('game-goto-target').disabled=!game.targetDestination(target.point);
+  $('game-maps').disabled=!selectedGameMapPoint();
+  pulseTargetActions();
 };
 bindGameStick($('game-stick'),()=>terrainView?.game);
 bindGameLook($('game-look'),()=>terrainView?.game);
