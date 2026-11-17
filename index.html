@@ -1759,7 +1759,7 @@ function clearPhotoPreview() {
   photoPreviewURL = null;
   $("photo-reference").hidden = true;
   document.body.classList.remove("photo-mode", "compare-horizon");
-  window.HorizonUI?.updateComparison();
+  window.HorizonUI?.updateComparison?.();
 }
 function showPhotoPreview(file) {
   clearPhotoPreview();
@@ -1767,7 +1767,7 @@ function showPhotoPreview(file) {
   photoPreviewURL = url;
   $("photo-reference").hidden = false;
   document.body.classList.add("photo-mode");
-  window.HorizonUI?.updateComparison();
+  window.HorizonUI?.updateComparison?.();
   $("photo-caption").textContent = file.name;
   $("photo-preview-status").textContent = "Loading photo preview…";
   img.hidden = false;

@@ -1046,3 +1046,18 @@ test('selected map paths stay clear of overlay controls in every direction and f
   }
   await close(page);
 });
+
+
+test('photo upload tolerates an older cached UI without updateComparison',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await page.evaluate(()=>{
+    delete window.HorizonUI.updateComparison;
+    window.exifr.parse=async()=>({GPSLatitude:48.8584,GPSLongitude:2.2945,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.8584,longitude:2.2945});
+  });
+  await page.locator('#photo-file').setInputFiles({name:'cached-ui-photo.jpg',mimeType:'image/jpeg',buffer:Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2Q==','base64')});
+  await page.waitForFunction(()=>S.locationSource==='photo' && HZ.P && !HZ.loading && mapView==='perspective');
+  assert.equal(await page.locator('#photo-status').innerText(),'');
+  assert.equal(await page.locator('#photo-reference').isVisible(),true);
+  await page.waitForFunction(()=>!document.getElementById('photo-pick').disabled);
+  await close(page);
+});
