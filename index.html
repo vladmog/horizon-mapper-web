@@ -2,256 +2,31 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Horizon">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0a0d12">
+<meta name="theme-color" content="#f2f2f2">
 <meta name="description" content="Map terrain horizons, photos, GPX tracks, and viewpoints entirely in your browser.">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%230a0d12' stroke='%2338bdf8' stroke-width='6'/%3E%3Cpath d='M50 14 L62 56 L50 48 L38 56 Z' fill='%23f87171'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%23f2f2f2' stroke='%23333333' stroke-width='6'/%3E%3Cpath d='M50 14 L62 56 L50 48 L38 56 Z' fill='%23666666'/%3E%3C/svg%3E">
 <title>Horizon Mapper</title>
-<style>
-  :root{
-    --bg:#0a0d12; --card:#141a22; --card2:#1b2330; --line:#26303d;
-    --fg:#e8eef6; --dim:#8b9bb0; --accent:#38bdf8; --warn:#fbbf24;
-    --bad:#f87171; --good:#4ade80; --sky:#1d5c96; --ground:#6b4a2a;
-    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
-  }
-  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-  html,body{margin:0;background:var(--bg);color:var(--fg);
-    font:15px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;
-    -webkit-user-select:none;user-select:none;overscroll-behavior-y:contain}
-  body{padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 10px)
-       calc(env(safe-area-inset-bottom) + 16px) calc(env(safe-area-inset-left) + 10px);
-    margin:0 auto}
-
-  header{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  h1{font-size:15px;font-weight:650;letter-spacing:.02em;margin:0;flex:1}
-  .pill{font:600 11px/1 var(--mono);letter-spacing:.04em;padding:5px 8px;border-radius:999px;
-    background:var(--card2);color:var(--dim);border:1px solid var(--line);white-space:nowrap}
-  .pill.ok{color:var(--good);border-color:#1e4d33}
-  .pill.warn{color:var(--warn);border-color:#4d3d14}
-  .pill.bad{color:var(--bad);border-color:#4d2020}
-
-  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
-    padding:14px;margin-bottom:10px}
-  .card h2{font:600 11px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
-    color:var(--dim);margin:0 0 10px}
-  .row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
-
-  .big{font:700 clamp(38px,13vw,56px)/1 var(--mono);font-variant-numeric:tabular-nums;
-    letter-spacing:-.02em}
-  .unit{font-size:.45em;font-weight:600;color:var(--dim);margin-left:2px}
-  .card-label{font:600 11px/1 var(--mono);letter-spacing:.08em;color:var(--dim);
-    text-transform:uppercase;margin-bottom:5px}
-  .val{font:600 17px/1.25 var(--mono);font-variant-numeric:tabular-nums;word-break:break-all}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .sub{font:500 12px/1.3 var(--mono);color:var(--dim)}
-
-
-  button{font:600 14px/1 -apple-system,system-ui,sans-serif;color:var(--fg);
-    background:var(--card2);border:1px solid var(--line);border-radius:10px;
-    padding:11px 14px;cursor:pointer}
-  button:active{background:#232d3d}
-  button:disabled{opacity:.45;cursor:default}
-  button.on{background:var(--accent);border-color:var(--accent);color:#04202e}
-  .btns{display:flex;gap:8px;margin-top:12px}
-  .btns button{flex:1}
-
-  #card-location > .btns{flex-wrap:wrap}
-  #coordinate-form{margin-top:14px}
-  #coordinate-form label{display:block;margin-bottom:6px}
-  #coordinate-input{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:16px var(--mono);user-select:text;-webkit-user-select:text}
-  #coordinate-error{margin-top:8px}
-  #gate{position:fixed;inset:0;background:rgba(10,13,18,.97);z-index:50;
-    display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:16px;padding:28px;text-align:center}
-  #gate p{color:var(--dim);margin:0;max-width:30em;font-size:14px}
-  #gate button{font-size:16px;padding:16px 34px;background:var(--accent);
-    border-color:var(--accent);color:#04202e}
-  #gate.hidden{display:none}
-  .err{color:var(--bad);font:500 13px/1.45 var(--mono);white-space:pre-wrap}
-  .held{opacity:.55}
-  /* ── horizon ─────────────────────────────────────────── */
-  #hz-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;
-    background:#070a0f;border:1px solid var(--line)}
-  #hz{display:block;width:100%;height:250px;touch-action:none}
-  #hz{cursor:grab}
-  #hz.panning{cursor:grabbing}
-  #photo-reference{margin:0 0 10px}
-  #photo-viewport{height:clamp(120px,26dvh,240px);overflow:hidden;touch-action:none;
-    background:#070a0f;border:1px solid var(--line);border-radius:12px;cursor:grab}
-  #photo-viewport:active{cursor:grabbing}
-  #photo-preview{display:block;width:100%;height:100%;object-fit:contain;
-    transform-origin:center;pointer-events:none}
-  #photo-caption{margin-top:6px;overflow-wrap:anywhere}
-  #photo-preview[hidden]{display:none}
-  body.photo-mode #hz{height:clamp(150px,30dvh,250px)}
-  body.full #hz{height:max(200px,calc(100dvh - 340px))}
-  body.full.photo-mode #hz{height:max(150px,calc(65dvh - 260px))}
-  body.full #card-map,
-  body.full #card-pos,body.full #card-location,body.full #foot{display:none}
-  .hz-row{display:flex;gap:7px;margin-top:9px;align-items:center;flex-wrap:wrap}
-  .hz-row > label{font:600 10px/1 var(--mono);letter-spacing:.09em;color:var(--dim);
-    text-transform:uppercase;min-width:3.6em}
-  .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
-  .seg button{border:0;border-radius:0;padding:9px 11px;font-size:12px}
-  .seg button + button{border-left:1px solid var(--line)}
-  #hz-status{font:500 12px/1.35 var(--mono);color:var(--dim);margin-top:9px;min-height:1.25em}
-  #hz-status.err{color:var(--bad)}
-  #hz-readout{display:none;margin-top:10px;padding:11px;background:var(--card2);
-    border:1px solid var(--line);border-radius:12px}
-  #hz-readout.on{display:block}
-  .hz-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
-  .hz-grid .val{font-size:15px}
-  #hz-meta{float:right;font:500 10px/1 var(--mono);color:var(--dim);letter-spacing:.04em}
-  /* ── map ─────────────────────────────────────────────── */
-  #mp-wrap{position:relative;width:100%;border-radius:12px;overflow:hidden;
-    background:#070a0f;border:1px solid var(--line)}
-  /* Map gestures own the canvas; scroll the page using the surrounding controls. */
-  #mp{display:block;width:100%;aspect-ratio:1;touch-action:none;cursor:grab}
-  #mp-attribution{max-width:100%;padding:3px 5px;text-align:right;
-    background:rgba(10,13,18,.85);font:9px/1.3 -apple-system,system-ui,sans-serif;color:var(--fg)}
-  #mp-attribution a{color:inherit}
-  #mp-meta{float:right;font:500 10px/1 var(--mono);color:var(--dim);letter-spacing:.04em}
-  #view-compass{position:absolute;top:12px;right:12px;z-index:2;width:44px;height:44px;
-    border-radius:50%;pointer-events:none;background:#0a111bd9;border:1px solid #a8bac8;
-    box-shadow:inset 0 0 0 3px #ffffff0d;filter:drop-shadow(0 2px 4px #000b)}
-  #view-compass-arrow{position:absolute;inset:7px 20px;transform-origin:50% 50%}
-  #view-compass-arrow::before{content:"";position:absolute;left:50%;top:5px;bottom:2px;
-    border-left:2px solid #eef5fa;transform:translateX(-50%)}
-  #view-compass-arrow::after{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
-    border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:11px solid #ff6868}
-
-  /* Let available space, including split-screen windows, choose the layout. */
-  .card{min-width:0}
-  button{min-height:44px}
-  .btns{flex-wrap:wrap}
-  .btns button{min-width:0}
-  .sub{overflow-wrap:anywhere}
-  button:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
-  #gate{overflow-y:auto;justify-content:safe center;
-    padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right))
-      max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
-  #gate > *{flex-shrink:0}
-
-  @media (min-width:700px){
-    body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-      grid-template-areas:"header header" "location location" "horizon horizon"
-        "map position" "foot foot" "diagnostics diagnostics";
-      gap:14px;padding:calc(env(safe-area-inset-top) + 16px)
-        calc(env(safe-area-inset-right) + 18px) calc(env(safe-area-inset-bottom) + 20px)
-        calc(env(safe-area-inset-left) + 18px);align-items:start}
-    header{grid-area:header;margin:0}
-    .card{margin:0;padding:18px}
-    #card-location{grid-area:location}
-    #card-horizon{grid-area:horizon}
-    #card-map{grid-area:map}
-    #card-pos{grid-area:position}
-    #foot{grid-area:foot}
-    #diagnostics{grid-area:diagnostics;margin:0;justify-content:center}
-    #diagnostics button{flex:0 1 320px}
-    #hz{height:clamp(280px,34dvh,460px)}
-    body.photo-mode #hz{height:clamp(220px,28dvh,380px)}
-    #photo-viewport{height:clamp(220px,30dvh,420px)}
-    body.full{grid-template-areas:"header header" "horizon horizon";
-      grid-template-rows:auto 1fr}
-    body.full #diagnostics{display:none}
-    body.full.photo-mode #hz{height:max(220px,calc(60dvh - 280px))}
-  }
-  @media (min-width:700px) and (orientation:portrait){
-    body{grid-template-areas:"header header" "location location" "horizon horizon"
-      "map map" "position position" "foot foot" "diagnostics diagnostics"}
-  }
-  @media (min-width:700px) and (orientation:landscape){
-    body{grid-template-columns:repeat(2,minmax(0,1fr));
-      grid-template-rows:auto auto max-content minmax(0,1fr) auto auto;
-      grid-template-areas:"header header" "location location" "horizon map"
-        "horizon position" "foot foot" "diagnostics diagnostics"}
-    #hz{height:clamp(300px,44dvh,620px)}
-  }
-  @media (max-height:500px) and (orientation:landscape){
-    #hz{height:clamp(180px,55dvh,260px)}
-    #photo-viewport{height:180px}
-  }
-  @media (min-width:700px) and (max-height:500px) and (orientation:landscape){
-    /* Keep the same source-first order with compact spacing on landscape phones. */
-    body{gap:10px;padding-top:calc(env(safe-area-inset-top) + 8px);
-      grid-template-rows:auto auto max-content minmax(0,1fr) auto auto;
-      grid-template-areas:"header header" "location location" "horizon map"
-        "horizon position" "foot foot" "diagnostics diagnostics"}
-    .card{padding:12px}
-    body:not(.full).photo-mode #hz{height:clamp(180px,55dvh,260px)}
-  }
-  @media (max-width:359px){
-    .card{padding:10px}
-    .hz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .seg button{padding-inline:9px}
-  }
-  #card-location{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;
-    padding:8px 12px;border-radius:12px}
-  #card-location .btns{margin:0;flex-shrink:0;gap:6px}
-  #card-location .btns button{flex:none;padding-inline:12px}
-  #location-source{flex:1 1 180px;min-width:0}
-  #source-help{font-size:12px;color:var(--dim)}
-  #source-help summary{cursor:pointer;min-height:44px;align-content:center}
-  #source-help[open]{flex-basis:100%}
-  #source-help p{margin:0 0 6px;max-width:85ch}
-  #photo-status{flex-basis:100%}
-  #photo-status:empty{display:none}
-  #mp3d{display:block;width:100%;aspect-ratio:1;touch-action:none;cursor:grab}
-  #mp3d:active{cursor:grabbing}
-  #mp3d:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}
-  [hidden]{display:none!important}
-  #terrain-empty{position:absolute;inset:0 0 24px;display:grid;place-items:center;
-    padding:24px;text-align:center;pointer-events:none}
-  #map-view-row{margin:0 0 10px}
-  body.map-fullscreen{overflow:hidden}
-  body.map-fullscreen #card-map{position:fixed;inset:0;z-index:100;margin:0;padding:0;border:0;border-radius:0;background:#070a0f;display:flex;flex-direction:column}
-  body.map-fullscreen:not(.game-mode) #card-map > :not(#mp-wrap):not(#map-view-row){display:none!important}
-  body.map-fullscreen:not(.game-mode) #map-view-row{flex:none;margin:0;padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) 10px max(10px,env(safe-area-inset-left));background:var(--card)}
-  body.map-fullscreen:not(.game-mode) #terrain-hint{display:none}
-  body.map-fullscreen:not(.game-mode) #mp-wrap{flex:1;min-height:0;border:0;border-radius:0}
-  body.map-fullscreen:not(.game-mode) #mp,body.map-fullscreen:not(.game-mode) #mp3d{position:absolute;inset:0;width:100%;height:100%;aspect-ratio:auto}
-  body.map-fullscreen:not(.game-mode) #mp-attribution{position:absolute;bottom:0;right:0;left:0;pointer-events:none}
-  #map-fullscreen{margin-left:auto;white-space:nowrap}
-  body.game-mode{overflow:hidden}
-  body.game-mode #card-map{position:fixed;inset:0;z-index:100;margin:0;padding:0;border:0;border-radius:0;background:#070a0f}
-  body.game-mode #card-map > :not(#mp-wrap):not(#game-controls){display:none!important}
-  body.game-mode #mp-wrap{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:0}
-  body.game-mode #mp3d{width:100%;height:100%;aspect-ratio:auto}
-  body.game-mode #view-compass{top:auto;right:18px;bottom:max(204px,calc(env(safe-area-inset-bottom) + 204px));z-index:3}
-  #game-controls{position:absolute;inset:0;pointer-events:none;color:white;z-index:2}
-  #game-controls button{pointer-events:auto;touch-action:none;background:#142331e8;border:1px solid #557083;color:white}
-  .game-header{position:absolute;top:max(12px,env(safe-area-inset-top));left:12px;right:12px;display:flex;flex-direction:column;align-items:flex-start;gap:12px}
-  .game-top{display:flex;gap:8px;flex-wrap:wrap;width:100%}
-  .game-speed{display:flex;align-items:center;gap:8px;padding:6px 12px;background:#163346;border-radius:10px;pointer-events:auto}.game-speed select{font:inherit;color:inherit;background:#163346;border:1px solid #668497;border-radius:5px;padding:4px}
-  #game-status{max-width:100%;box-sizing:border-box;text-shadow:0 1px 3px #000;font:12px var(--mono);background:#0a0d12b8;padding:8px;border-radius:6px}
-  .game-help{margin:0;font-size:12px;text-shadow:0 1px 3px #000}
-  .game-stick{position:absolute;bottom:max(42px,env(safe-area-inset-bottom));left:18px;width:144px;height:144px;border-radius:50%;border:1px solid #7892a5;background:radial-gradient(circle,#28465b99,#142331cc);pointer-events:auto;touch-action:none;user-select:none;display:grid;place-items:center;box-shadow:inset 0 0 0 24px #ffffff08}
-  .game-stick-thumb{width:56px;height:56px;border-radius:50%;background:#d2e5f3cc;border:2px solid #edf7ff;box-shadow:0 3px 12px #0008;pointer-events:none}
-  .game-actions{position:absolute;right:18px;bottom:max(42px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:6px}
-  #project-panel input:not([type="checkbox"]):not([type="color"]),#project-panel select{background:#111d2a;color:var(--fg);border:1px solid #34465b;border-radius:8px;padding:8px;max-width:100%}
-  #project-panel input[type="color"]{border:0;padding:2px;background:transparent;flex-shrink:0}
-  @media(max-width:600px){.game-help{font-size:10px;max-width:280px}.game-top button{font-size:12px;padding:8px}.game-top{gap:5px;display:grid;grid-template-columns:1fr 1fr}}
-</style>
+<link rel="stylesheet" href="./workspace.css">
 </head>
 <body>
-
-<header>
-  <h1>Horizon Mapper</h1>
-  <span class="pill" id="pill-motion">SENSORS</span>
-  <span class="pill" id="pill-gps">GPS</span>
-</header>
-
-<section class="card" id="card-location" aria-label="Location source">
-  <div class="btns">
-    <button id="coordinate-pick" aria-expanded="false" aria-controls="coordinate-form">Enter coordinates</button>
-    <button id="photo-pick">Upload photo</button>
-    <button id="use-gps" class="on">Use device GPS</button>
+<a class="skip-link" href="#workspace">Skip to map</a>
+<header class="app-header" id="app-header"><a href="./" class="brand" aria-label="Horizon Mapper home"><svg viewBox="0 0 40 40" width="36" height="36" fill="none" aria-hidden="true"><path d="M3 30 15 11l7 10 5-8 10 17M3 35h34M9 30l6-9 7 9M17 15l-2 6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Horizon<span class="brand-sub">MAPPER</span></span></a><div class="header-context"><span class="status-dot" aria-hidden="true"></span><span id="workspace-state">No location selected</span></div><button id="header-location" class="quiet-button">Change location <span aria-hidden="true">↗</span></button></header>
+<div class="app-layout">
+<aside id="sidebar" aria-label="Workspace tools">
+<div class="sidebar-top"><span class="eyebrow">Controls</span><button id="panel-close" aria-label="Close tools and return to map">Back to map ×</button></div>
+<nav class="panel-tabs" aria-label="Workspace tools"><button data-panel="location" class="active" aria-pressed="true">Location</button><button data-panel="project" aria-pressed="false">Project</button><button data-panel="settings" aria-pressed="false">Settings</button></nav>
+<div class="panel-body" id="panel-location" data-tool-panel="location"><section class="card" id="card-location" aria-label="Location source">
+  <div class="section-heading"><span class="eyebrow">Location</span><h2>Set location</h2><p class="sub">Use coordinates, a photo, or device GPS.</p></div>
+  <div class="btns source-options">
+    <button id="coordinate-pick" aria-expanded="false" aria-controls="coordinate-form"><span class="source-symbol" aria-hidden="true">＋</span><span>Coordinates<small>Type or paste a location</small></span></button>
+    <button id="photo-pick"><span class="source-symbol" aria-hidden="true">▧</span><span>Photo<small>Read its GPS metadata</small></span></button>
+    <button id="use-gps"><span class="source-symbol" aria-hidden="true">◎</span><span>My location<small>Use device GPS & compass</small></span></button>
   </div>
   <form id="coordinate-form" hidden novalidate>
     <label for="coordinate-input">Latitude, longitude</label>
@@ -261,148 +36,16 @@
     <div class="err" id="coordinate-error" role="status" aria-live="polite"></div>
   </form>
   <input id="photo-file" type="file" multiple accept="image/jpeg,image/heic,image/heif,image/tiff,image/png,.jpg,.jpeg,.heic,.heif,.tif,.tiff,.png" hidden>
-  <div class="sub" id="location-source">Using device GPS.</div>
+  <div class="sub" id="location-source">No location selected.</div>
   <details id="source-help">
-    <summary>Photo help</summary>
+    <summary>About photo locations</summary>
     <p class="sub">Choose an original JPEG, HEIC, TIFF, or PNG with GPS metadata to map its horizon. The photo stays on this device. Terrain tiles are fetched directly from AWS Open Data, imagery from Esri, and nearby peak names from OpenStreetMap.</p>
   </details>
   <div class="err" id="photo-status" role="status" aria-live="polite"></div>
 </section>
 
-<!-- ── HORIZON ───────────────────────────────────────── -->
-<div class="card" id="card-horizon">
-  <h2>Horizon <span id="hz-meta"></span></h2>
-  <figure id="photo-reference" hidden>
-    <div id="photo-viewport">
-      <img id="photo-preview" alt="Uploaded photo for comparison with the horizon" draggable="false">
-    </div>
-    <figcaption class="sub" id="photo-caption"></figcaption>
-    <div class="sub" id="photo-preview-status" role="status"></div>
-  </figure>
-  <div id="hz-wrap"><canvas id="hz"></canvas></div>
-  <div class="sub" id="pan-hint" style="margin-top:9px">Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
-  <div id="hz-status">Waiting for a GPS fix…</div>
-
-  <details id="peak-panel" style="margin:10px 0">
-    <summary>Named peaks <span id="peak-count" class="sub"></span></summary>
-    <p id="peak-status" class="sub" role="status">Map the horizon to find named peaks.</p>
-    <button id="peak-retry" hidden>Retry peak names</button>
-    <div id="peak-list" style="display:flex;flex-wrap:wrap;gap:7px;max-height:180px;overflow:auto"></div>
-    <p class="sub">Names matched to visible terrain, approximately. Coverage varies.
-      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:var(--accent)">OpenStreetMap contributors</a></p>
-  </details>
-  <div id="hz-readout">
-    <div id="r-peak" style="font-weight:650;margin-bottom:9px" hidden></div>
-    <div class="hz-grid">
-      <div><div class="card-label">Bearing</div><div class="val" id="r-az">--</div></div>
-      <div><div class="card-label">Elev ang</div><div class="val" id="r-el">--</div></div>
-      <div><div class="card-label">Distance</div><div class="val" id="r-d">--</div></div>
-      <div><div class="card-label">Altitude</div><div class="val" id="r-h">--</div></div>
-    </div>
-    <div class="sub" id="r-ll" style="margin-top:9px">--</div>
-    <div class="btns">
-      <button id="r-maps">Open in Maps</button>
-      <button id="r-copy">Copy</button>
-      <button id="r-clear">Clear</button>
-    </div>
-  </div>
-
-  <div class="hz-row" id="hz-actions">
-    <button id="hz-go" style="flex:1">Map the horizon</button>
-  </div>
-  <div class="hz-row">
-    <label>Range</label>
-    <div class="seg" id="hz-range">
-      <button data-r="24140.16">15</button><button data-r="48280.32" class="on">30</button
-      ><button data-r="96560.64">60</button><button data-r="193121.28">120&#8239;mi</button>
-    </div>
-  </div>
-  <div class="hz-row">
-    <label>View</label>
-    <div class="seg" id="hz-fov">
-      <button data-f="30">30°</button><button data-f="60" class="on">60°</button
-      ><button data-f="120">120°</button><button data-f="360">360°</button>
-    </div>
-    <div class="seg" id="hz-mode">
-      <button data-m="chart" class="on">Chart</button><button data-m="true">True</button>
-    </div>
-  </div>
-  <div class="hz-row">
-    <label id="hz-bearing-label">Correction</label>
-    <span class="sub" id="hz-nudge">+0.0°</span>
-    <span class="sub" id="hz-center">Viewing 0.0°</span>
-    <button id="hz-nudge-reset">Reset</button>
-  </div>
-</div>
-
-<!-- ── MAP ───────────────────────────────────────────── -->
-<div class="card" id="card-map">
-  <h2>Map <span id="mp-meta"></span></h2>
-  <div class="hz-row" id="map-view-row">
-    <div class="seg" id="map-view" aria-label="Map view">
-      <button data-v="2d" class="on" aria-pressed="true">2D</button><button data-v="3d" aria-pressed="false">3D</button>
-      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Map a location to use its viewpoint">Perspective</button>
-      <button data-v="game" id="map-game" aria-pressed="false" disabled>Game</button>
-    </div>
-    <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
-    <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
-  </div>
-  <div id="mp-wrap"><canvas id="mp"></canvas>
-    <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
-    <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
-    <div id="terrain-empty" class="sub" hidden></div>
-    <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
-  </div>
-  <div class="hz-row">
-    <span class="sub" id="sat-status" role="status" aria-live="polite"></span>
-    <button id="sat-retry" hidden>Retry imagery</button>
-  </div>
-  <div id="game-controls" hidden>
-    <div class="game-header">
-    <div class="game-top"><button id="game-exit">Exit game</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-maps" disabled>Open in Maps</button><button id="game-target">Place laser target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
-    <div id="game-status" role="status"></div>
-    <p class="game-help">WASD / arrows: run · Shift: sprint · Drag: aim laser / look · E / Q: up / down · Esc: exit</p>
-    </div>
-    <div id="game-stick" class="game-stick" role="group" aria-label="Movement stick. Drag to move; farther from center moves faster. Keyboard: WASD or arrow keys."><span class="game-stick-thumb"></span></div>
-    <div class="game-actions"><button data-game-key="shift">Sprint</button><button data-game-key="e" aria-label="Fly up">Ascend</button><button data-game-key="q" aria-label="Fly down">Descend</button></div>
-  </div>
-  <div class="hz-row" id="map-zoom-row">
-    <label>Zoom</label>
-    <div class="seg" id="mp-zoom">
-      <button data-k="0" class="on">Fit</button><button data-k="1">1&#215;</button
-      ><button data-k="2">2&#215;</button><button data-k="4">4&#215;</button>
-    </div>
-  </div>
-  <div id="terrain-controls" hidden>
-    <div class="hz-row" id="photo-observer-row" hidden>
-      <label>Observer</label><div class="seg" id="photo-observer" aria-label="Observer height">
-        <button data-height="ground" class="on" aria-pressed="true">Ground</button>
-        <button data-height="photo" aria-pressed="false">Photo altitude</button>
-        <button data-height="custom" aria-pressed="false">Custom</button>
-      </div>
-    </div>
-    <form class="hz-row" id="custom-height-row" hidden>
-      <label for="custom-height">Height above ground (m)</label>
-      <input id="custom-height" type="number" min="1.6" max="5000" step="0.1" value="30" required
-        style="width:90px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit">
-      <button type="submit">Apply</button>
-    </form>
-    <div class="hz-row">
-      <label>Detail</label><div class="seg" id="terrain-detail" aria-label="Terrain detail">
-        <button data-d="low">Low</button><button data-d="medium">Medium</button><button data-d="high" class="on">High</button>
-      </div>
-    </div>
-    <div class="hz-row">
-      <button id="terrain-reset">Reset view</button>
-      <button id="terrain-reload" hidden>Reload terrain</button>
-    </div>
-    <p class="sub" id="terrain-status" role="status"></p>
-  </div>
-</div>
-
-<!-- ── POSITION ──────────────────────────────────────── -->
 <div class="card" id="card-pos">
-  <h2>Position</h2>
+  <h2>Viewpoint details</h2>
   <div class="grid2">
     <div>
       <div class="card-label">Latitude</div>
@@ -429,35 +72,160 @@
     </div>
   </div>
   <div class="btns">
-    <button id="btn-copy">Copy</button>
+    <button id="btn-copy">Copy coordinates</button>
     <button id="btn-maps">Maps</button>
-    <button id="btn-hold">Hold</button>
+    <button id="btn-hold">Pause GPS</button>
   </div>
-  <div class="hz-row">
+    <div class="hz-row" id="hz-actions">
+    <button id="hz-go" style="flex:1">Map the horizon</button>
+  </div>
+
+  <div class="sub err" id="pos-err" style="margin-top:10px"></div>
+</div>
+
+<div id="foot" class="sub"></div></div>
+<div class="panel-body" id="panel-project" data-tool-panel="project" hidden><div id="project-mount"></div></div>
+<div class="panel-body" id="panel-settings" data-tool-panel="settings" hidden><section class="card"><div class="section-heading"><span class="eyebrow">Preferences</span><h2>Settings</h2><p class="sub">Map links, controls, and diagnostics.</p></div><h3>Preferred map app</h3>  <div class="hz-row">
     <label>Open in</label>
     <div class="seg" id="map-app">
       <button data-a="apple" class="on">Apple</button><button data-a="google">Google</button
       ><button data-a="gaia">Gaia</button>
     </div>
   </div>
-  <div class="sub err" id="pos-err" style="margin-top:10px"></div>
+<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, Shift to sprint, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
+</aside>
+<main id="workspace" tabindex="-1"><div class="workspace-heading"><div><h1>Explore</h1></div><div class="workspace-status"><span class="pill" id="pill-motion">SENSORS</span><span class="pill" id="pill-gps">GPS</span></div></div><div class="card" id="card-map">
+  <div class="surface-heading"><div><h2>Map</h2></div><span id="mp-meta" class="sub"></span></div>
+  <div class="hz-row" id="map-view-row">
+    <div class="seg" id="map-view" aria-label="Map view">
+      <button data-v="2d" class="on" aria-pressed="true">Map</button><button data-v="3d" aria-pressed="false">Terrain</button>
+      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Map a location to use its viewpoint">Viewpoint</button>
+      <button data-v="game" id="map-game" aria-pressed="false" disabled>Walk</button>
+    </div>
+    <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
+    <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
+  </div>
+  <div id="mp-wrap"><canvas id="mp" aria-label="Satellite map of the current viewpoint. Drag to pan; select a point on the horizon to locate it here."></canvas>
+    <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
+<section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-coordinates" class="primary">Enter coordinates <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-btn">Use my location</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
+    <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
+    <div id="terrain-empty" class="sub" hidden></div>
+    <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
+  </div>
+  <div class="hz-row">
+    <span class="sub" id="sat-status" role="status" aria-live="polite"></span>
+    <button id="sat-retry" hidden>Retry imagery</button>
+  </div>
+  <div id="game-controls" hidden>
+    <div class="game-header">
+    <div class="game-top"><button id="game-exit">Exit walk</button><button id="game-respawn">Return to start</button><button id="game-goto-target" disabled>Go to target</button><button id="game-maps" disabled>Open in Maps</button><button id="game-target">Mark target</button><label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label></div>
+    <div id="game-status" role="status"></div>
+    <p class="game-help">WASD / arrows: run · Shift: sprint · Drag: aim laser / look · E / Q: up / down · Esc: exit</p>
+    </div>
+    <div id="game-stick" class="game-stick" role="group" aria-label="Movement stick. Drag to move; farther from center moves faster. Keyboard: WASD or arrow keys."><span class="game-stick-thumb"></span></div>
+    <div class="game-actions"><button data-game-key="shift">Sprint</button><button data-game-key="e" aria-label="Fly up">Ascend</button><button data-game-key="q" aria-label="Fly down">Descend</button></div>
+  </div>
+  <div class="hz-row">
+    <label>Map radius</label>
+    <div class="seg" id="hz-range">
+      <button data-r="24140.16">15</button><button data-r="48280.32" class="on">30</button
+      ><button data-r="96560.64">60</button><button data-r="193121.28">120&#8239;mi</button>
+    </div>
+  </div>
+  <div class="hz-row" id="map-zoom-row">
+    <label>Zoom</label>
+    <div class="seg" id="mp-zoom">
+      <button data-k="0" class="on">Fit</button><button data-k="1">1&#215;</button
+      ><button data-k="2">2&#215;</button><button data-k="4">4&#215;</button>
+    </div>
+  </div>
+  <details id="terrain-controls" hidden><summary>View settings <span>Observer height & terrain detail</span></summary>
+    <div class="hz-row" id="photo-observer-row" hidden>
+      <label>Observer</label><div class="seg" id="photo-observer" aria-label="Observer height">
+        <button data-height="ground" class="on" aria-pressed="true">Ground</button>
+        <button data-height="photo" aria-pressed="false">Photo altitude</button>
+        <button data-height="custom" aria-pressed="false">Custom</button>
+      </div>
+    </div>
+    <form class="hz-row" id="custom-height-row" hidden>
+      <label for="custom-height">Height above ground (m)</label>
+      <input id="custom-height" type="number" min="1.6" max="5000" step="0.1" value="30" required
+        style="width:90px;min-width:0;padding:8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:inherit">
+      <button type="submit">Apply</button>
+    </form>
+    <div class="hz-row">
+      <label>Detail</label><div class="seg" id="terrain-detail" aria-label="Terrain detail">
+        <button data-d="low">Low</button><button data-d="medium">Medium</button><button data-d="high" class="on">High</button>
+      </div>
+    </div>
+    <div class="hz-row">
+      <button id="terrain-reset">Reset view</button>
+      <button id="terrain-reload" hidden>Reload terrain</button>
+    </div>
+    <p class="sub" id="terrain-status" role="status"></p>
+  </details>
 </div>
 
-<div class="sub" style="text-align:center;padding:4px 0 10px" id="foot"></div>
-<div class="btns" id="diagnostics"><button id="debug-download">Download diagnostics</button></div>
-<div class="sub" style="text-align:center;padding:12px"><a href="./privacy.html" style="color:var(--accent)">Privacy</a></div>
+<div class="card" id="card-horizon">
+  <div class="surface-heading"><div><h2>Horizon</h2></div><span id="hz-meta" class="sub"></span></div>
+  <figure id="photo-reference" hidden>
+    <div id="photo-viewport">
+      <img id="photo-preview" alt="Uploaded photo for comparison with the horizon" draggable="false">
+    </div>
+    <figcaption class="sub" id="photo-caption"></figcaption>
+    <div class="sub" id="photo-preview-status" role="status"></div>
+  </figure>
+  <div id="hz-wrap"><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas></div>
+  <div class="sub" id="pan-hint" >Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
+  <div id="hz-status">Waiting for a GPS fix…</div>
 
-<!-- ── PERMISSION GATE ───────────────────────────────── -->
-<div id="gate">
-  <h1 style="font-size:22px;flex:none">Horizon Mapper</h1>
-  <p id="gate-msg">iOS requires a tap before it will hand over the
-     magnetometer, gyroscope, and GPS. You can also map a photo or enter coordinates without enabling sensors.</p>
-  <button id="gate-btn">Enable sensors</button>
-  <button id="gate-coordinates">Enter coordinates instead</button>
-  <button id="gate-photo">Use a photo instead</button>
-  <div class="err" id="gate-err"></div>
+  <details id="peak-panel" style="margin:10px 0">
+    <summary>Named peaks <span id="peak-count" class="sub"></span></summary>
+    <p id="peak-status" class="sub" role="status">Map the horizon to find named peaks.</p>
+    <button id="peak-retry" hidden>Retry peak names</button>
+    <div id="peak-list" style="display:flex;flex-wrap:wrap;gap:7px;max-height:180px;overflow:auto"></div>
+    <p class="sub">Names matched to visible terrain, approximately. Coverage varies.
+      © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener" style="color:var(--accent)">OpenStreetMap contributors</a></p>
+  </details>
+  <div id="hz-readout"><div class="readout-heading"><span class="eyebrow" id="readout-title">Point details</span><span class="sub">Tap a ridge to inspect it</span></div>
+    <div id="r-peak" style="font-weight:650;margin-bottom:9px" hidden></div>
+    <div class="hz-grid">
+      <div><div class="card-label">Bearing</div><div class="val" id="r-az">--</div></div>
+      <div><div class="card-label">Elevation angle</div><div class="val" id="r-el">--</div></div>
+      <div><div class="card-label">Distance</div><div class="val" id="r-d">--</div></div>
+      <div><div class="card-label">Altitude</div><div class="val" id="r-h">--</div></div>
+    </div>
+    <div class="sub" id="r-ll" >--</div>
+    <div class="btns">
+      <button id="r-maps">Open in Maps</button>
+      <button id="r-copy">Copy coordinates</button>
+      <button id="r-clear">Clear selection</button>
+    </div>
+  </div>
+
+  <details class="profile-options"><summary>Skyline controls <span>Field of view & alignment</span></summary>
+  <div class="hz-row">
+    <label>Field of view</label>
+    <div class="seg" id="hz-fov">
+      <button data-f="30">30°</button><button data-f="60" class="on">60°</button
+      ><button data-f="120">120°</button><button data-f="360">360°</button>
+    </div>
+    <div class="seg" id="hz-mode">
+      <button data-m="chart" class="on">Fit skyline</button><button data-m="true">True scale</button>
+    </div>
+  </div>
+  <div class="hz-row">
+    <label id="hz-bearing-label">Correction</label>
+    <span class="sub" id="hz-nudge">+0.0°</span>
+    <span class="sub" id="hz-center">Viewing 0.0°</span>
+    <button id="hz-nudge-reset">Reset</button>
+  </div>
+</details>
 </div>
 
+</main></div>
+<div id="panel-backdrop" hidden></div>
+<nav class="mobile-dock" aria-label="Main navigation"><button data-mobile-panel="explore" aria-pressed="true"><span aria-hidden="true">⌖</span>Explore</button><button data-mobile-panel="location" aria-pressed="false"><span aria-hidden="true">◎</span>Location</button><button data-mobile-panel="project" aria-pressed="false"><span aria-hidden="true">▧</span>Project</button><button data-mobile-panel="settings" aria-pressed="false"><span aria-hidden="true">☷</span>Settings</button></nav>
 <script src="./log-sanitize.js"></script>
 <script src="./diagnostics.js"></script>
 <script src="./vendor/exifr-7.1.3.js"></script>
@@ -546,7 +314,7 @@ function startGeo() {
   if (!navigator.geolocation) { S.posErr = "Geolocation unsupported"; return; }
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = navigator.geolocation.watchPosition(
-    p => { if (S.locationSource === "gps" && !S.hold) { S.pos = p; S.posErr = null; } },
+    p => { if (S.locationSource === "gps" && !S.hold) { S.pos = p; S.posErr = null; if (S.mapNextFix) { S.mapNextFix = false; mapHorizon(); } } },
     err => { if (S.locationSource !== "gps") return; S.posErr = err.code === 1
         ? "Location denied. Settings › Safari › Location → Allow,\nthen reload."
         : `Location error: ${err.message}`; },
@@ -621,6 +389,7 @@ function render(ts) {
   }
   $("custom-height-row").hidden = photoObserverHeight !== "custom";
   updateReadout();
+  window.HorizonUI?.update();
   $("hz-nudge").textContent = S.locationSource !== "gps"
     ? HZ.photoBearing.toFixed(1) + "°"
     : (HZ.nudge >= 0 ? "+" : "\u2212") + Math.abs(HZ.nudge).toFixed(1) + "\u00b0";
@@ -630,13 +399,13 @@ function render(ts) {
   $("hz-actions").style.display = (S.locationSource === "photo" || S.locationSource === "coordinates") && !HZ.err ? "none" : "flex";
   $("hz-go").textContent = HZ.err ? "Retry mapping" : "Map the horizon";
   if (!HZ.loading && !HZ.err) {
-    if (!S.pos) HZ.status = "Waiting for a GPS fix\u2026";
+    if (!S.pos) HZ.status = "Choose a location to map its horizon.";
     else if (!HZ.P) HZ.status = "Ready \u2014 tap Map the horizon.";
     else if (movedFar()) HZ.status = "You have moved more than 200 m \u2014 map again.";
   }
   $("hz-status").textContent = HZ.status;
   $("hz-status").className = HZ.err ? "err" : "";
-  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : S.locationSource === "photo" ? "Photo viewpoint" : "Coordinate viewpoint") : mapView === "3d" ? "3D terrain" : mapView === "game" ? "Game" : HZ.P ? "Satellite" : "";
+  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : S.locationSource === "photo" ? "Photo viewpoint" : "Coordinate viewpoint") : mapView === "3d" ? "3D terrain" : mapView === "game" ? "Walk" : HZ.P ? "Satellite" : "";
   $("hz-meta").textContent = HZ.P
     ? `${mileLabel(HZ.P.radius)} \u00b7 ${HZ.P.ms.tiles + HZ.P.ms.sweep} ms`
     : "";
@@ -682,9 +451,9 @@ function fitCanvas() {
   cvs.height = Math.max(1, Math.round(ch * d));
   ctx.setTransform(d, 0, 0, d, 0, 0);
   sky = ctx.createLinearGradient(0, 0, 0, ch);
-  sky.addColorStop(0, "#05080f");
-  sky.addColorStop(0.55, "#0b1524");
-  sky.addColorStop(1, "#22406a");
+  sky.addColorStop(0, "#111111");
+  sky.addColorStop(0.55, "#202020");
+  sky.addColorStop(1, "#444444");
 }
 
 /* Projection. Gnomonic (rectilinear, what a lens does) up to 120 deg, linear
@@ -1830,7 +1599,7 @@ function drawTerrainView() {
         : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Move to the marked target';
       const laserHit=game.laser().hit;
       $('game-target').disabled=!laserHit;
-      $('game-target').textContent=laserHit?'Place laser target':'Aim laser at terrain';
+      $('game-target').textContent=laserHit?'Mark target':'Aim at terrain';
       $('game-status').textContent=`${game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
     }
     terrainView.render(readoutTarget(), HZ.P?.hObs ?? (HZ.P ? HZ.P.ground + HZ.P.eye : 0));
@@ -1908,6 +1677,7 @@ function resetLocationOutput() {
   cancelProfilePan();
   if (es) { es.close(); es = null; }
   terrainData = null; terrainView?.setModel(null);
+  $("map-perspective").disabled = true; $("map-game").disabled = true;
   HZ.loading = false; HZ.P = null; HZ.at = null; HZ.err = false;
   HZ.pinnedTarget = null; HZ.selAz = null; HZ.selLayer = 0; HZ.pinAim = null;
   $("peak-count").textContent = "";
@@ -1928,6 +1698,7 @@ function openCoordinateForm() {
   $("gate").classList.add("hidden");
   $("coordinate-form").hidden = false;
   $("coordinate-pick").setAttribute("aria-expanded", "true");
+  window.HorizonUI?.showPanel("location");
   $("coordinate-input").focus();
 }
 $("coordinate-pick").onclick = openCoordinateForm;
@@ -1974,7 +1745,7 @@ $("coordinate-form").onsubmit = event => {
   $("location-source").textContent = `Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
   $("photo-status").textContent = "";
   mapHorizon();
-  $("card-horizon").scrollIntoView({ block: "start" });
+  window.HorizonUI?.showExplore();
   return true;
 };
 $("photo-pick").onclick = () => $("photo-file").click();
@@ -2008,7 +1779,7 @@ $("photo-file").onchange = async e => {
     $("location-source").textContent = `Photo: ${file.name} · ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
     $("photo-status").textContent = "";
     mapHorizon();
-    $("card-horizon").scrollIntoView({ block: "start" });
+    window.HorizonUI?.showExplore();
   } catch (err) {
     appDiagnostics.record("photo.failed", { message: err.message }, "warn");
     if (request === photoRequest) $("photo-status").textContent = err.message;
@@ -2028,7 +1799,7 @@ $("use-gps").onclick = () => {
   $("pan-hint").hidden = false;
   S.hold = false;
   $("btn-hold").classList.remove("on");
-  $("btn-hold").textContent = "Hold";
+  $("btn-hold").textContent = "Pause GPS";
   document.querySelectorAll("#card-pos").forEach(el => el.classList.remove("held"));
   $("use-gps").classList.add("on");
   $("photo-pick").classList.remove("on");
@@ -2038,9 +1809,11 @@ $("use-gps").onclick = () => {
 
 function mapHorizon() {
   if (!S.pos || HZ.loading) return;
+  window.HorizonUI?.showExplore();
   const c = observerRefreshView?.origin || S.pos.coords;
   if (es) { es.close(); es = null; }
   terrainData = null; terrainView?.setModel(null);
+  $("map-perspective").disabled = true; $("map-game").disabled = true;
   // A stale relief under a fresh polygon is the most confusing thing this pane
   // could show, so it goes at once, and the token invalidates any decode still
   // in flight.
@@ -2414,7 +2187,7 @@ cvs.addEventListener("lostpointercapture", e => finishProfilePan(e, true));
 $("btn-hold").onclick = e => {
   S.hold = !S.hold;
   e.target.classList.toggle("on", S.hold);
-  e.target.textContent = S.hold ? "Holding" : "Hold";
+  e.target.textContent = S.hold ? "Resume GPS" : "Pause GPS";
   for (const id of ["card-pos"])
     $(id).classList.toggle("held", S.hold);
 };
@@ -2504,6 +2277,7 @@ async function enableSensors(errorTarget = "gate-err") {
     }
   } catch (err) { errs.push("Sensor request failed: " + err.message); }
 
+  S.mapNextFix = true;
   attach();
   startGeo();
   keepAwake();
@@ -2525,15 +2299,11 @@ if (!window.isSecureContext) {
     "Open this app from its https:// address. Location and motion sensors are unavailable on an insecure page.";
   $("gate-btn").disabled = true;
   $("gate-btn").style.opacity = .4;
-} else if (!(window.DeviceOrientationEvent &&
-             typeof window.DeviceOrientationEvent.requestPermission === "function")) {
-  // Non-iOS (or iOS with prompts already handled): no gesture needed.
-  attach(); startGeo(); keepAwake();
-  $("gate-msg").textContent = "Tap to start.";
 }
 appDiagnostics.setContext(() => ({ mode: S.locationSource, fov: HZ.fov, radius: HZ.radius }));
 </script>
 <script src="./project-assets.js"></script>
+<script src="./workspace.js"></script>
 <script src="./pwa.js"></script>
 </body>
 </html>

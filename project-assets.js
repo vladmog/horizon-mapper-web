@@ -44,16 +44,18 @@ if(typeof document!=='undefined') (()=>{
   const clone=value=>structuredClone(value);
   const settings=['fov','radius','photoBearing','photoInitialBearing','selAz','selLayer','pinnedTarget','vCenter','mode'];
   const panel=document.createElement('section');panel.className='card';panel.id='project-panel';
-  panel.innerHTML=`<h2>Project</h2>
-    <div class="btns"><input id="project-name" aria-label="Project name" placeholder="Project name" value="Untitled project" style="min-width:140px;flex:1"><button id="project-save">Save project</button><button id="project-new">New project</button></div>
-    <div class="btns"><button id="asset-add">Add photos / GPX</button><button id="project-fit">Show all on map</button><button id="project-keep-target">Keep target</button></div>
+  panel.innerHTML=`<div class="section-heading"><span class="eyebrow">Project</span><h2>Project items</h2><p class="sub">Add photos and GPX tracks, then save them together.</p></div>
+    <label class="card-label" for="project-name">Project name</label>
+    <div class="project-title"><input id="project-name" placeholder="Project name" value="Untitled project"></div>
+    <div class="btns project-actions"><button id="asset-add">＋ Add photos or GPX tracks</button><button id="project-save">Save project</button><button id="project-new">New project</button><button id="project-fit">Show all on map</button><button id="project-keep-target">Keep target</button></div>
     <input id="asset-files" type="file" multiple accept="image/*,.heic,.heif,.gpx" hidden>
-    <div class="btns"><select id="project-saved" aria-label="Saved projects" style="min-width:120px;flex:1"><option value="">Saved projects…</option></select><button id="project-open">Open</button><button id="project-export">Export project</button><button id="project-import">Import project</button></div>
-    <input id="project-file" type="file" accept=".horizon,.json" hidden>
-    <p class="sub">Select a photo to edit its viewpoint and target. Colors identify each photo across the maps. Tracks follow terrain by default.</p>
+    <div id="project-empty" class="project-empty"><strong>No project items</strong><p class="sub">Add geotagged photos or a GPX track to begin a collection. Projects are saved on this device.</p></div>
     <div id="asset-list" style="display:grid;gap:8px"></div><div id="asset-targets" class="btns"></div>
-    <p id="project-message" class="sub" role="status"></p>`;
-  $('card-horizon').before(panel);
+    <p id="project-message" class="sub" role="status" aria-live="polite"></p>
+    <details class="project-file-actions"><summary>Saved projects & files</summary><div class="project-load"><select id="project-saved" aria-label="Saved projects"><option value="">Choose a saved project…</option></select><button id="project-open">Open</button></div><div class="btns"><button id="project-export">Export file</button><button id="project-import">Import file</button></div><p class="sub">Export a copy to move a project between devices.</p></details>
+    <input id="project-file" type="file" accept=".horizon,.json" hidden>
+    <details><summary>Project controls</summary><p class="sub">Select a photo to edit its viewpoint. Colors connect each item to the map. Use the checkbox to show or hide an item. Tracks follow terrain by default. Keep target saves a selected point with the active item.</p></details>`;
+  $('project-mount').append(panel);
   const state={id:crypto.randomUUID(),photos:[],tracks:[],active:null,busy:false,revision:0,signature:'',db:null};
   const say=text=>$('project-message').textContent=text;
   const color=()=>{
@@ -84,12 +86,12 @@ if(typeof document!=='undefined') (()=>{
   function list() {
     const root=$('asset-list');root.replaceChildren();
     for(const asset of [...state.photos,...state.tracks]) {
-      const row=document.createElement('div');row.className='btns';row.style.margin='0';
+      const row=document.createElement('div');row.className='asset-row';
       const visible=document.createElement('input');visible.type='checkbox';visible.checked=asset.visible!==false;visible.ariaLabel='Show '+asset.name;
       visible.onchange=()=>{asset.visible=visible.checked;dirty();};
       const swatch=document.createElement('input');swatch.type='color';swatch.value=asset.color;swatch.ariaLabel='Color for '+asset.name;swatch.style.width='38px';
       swatch.oninput=()=>{asset.color=swatch.value;dirty();};
-      const button=document.createElement('button');button.textContent=(asset.id===state.active?'● ':'')+asset.name;
+      const button=document.createElement('button');button.textContent=asset.name;button.className='asset-select';button.classList.toggle('on',asset.id===state.active);button.setAttribute('aria-pressed',String(asset.id===state.active));
       button.style.cssText='flex:1;min-width:0;overflow-wrap:anywhere;text-align:left';button.disabled=state.busy;
       button.onclick=()=>run(()=>asset.kind==='photo'?activate(asset):focusTrack(asset));
       row.append(visible,swatch,button);
@@ -98,7 +100,7 @@ if(typeof document!=='undefined') (()=>{
         for(const [v,label] of [['ground','On terrain'],['recorded','Recorded altitude']])mode.add(new Option(label,v));
         mode.value=asset.elevation||'ground';mode.onchange=()=>{asset.elevation=mode.value;dirty();};row.append(mode);
       }
-      const remove=document.createElement('button');remove.textContent='Remove';remove.disabled=state.busy;
+      const remove=document.createElement('button');remove.textContent='Remove';remove.className='asset-remove';remove.setAttribute('aria-label','Remove '+asset.name);remove.disabled=state.busy;
       remove.onclick=()=>run(async()=>{capture();state.photos=state.photos.filter(p=>p!==asset);state.tracks=state.tracks.filter(p=>p!==asset);
         if(state.active===asset.id){state.active=null;resetLocationOutput();clearPhotoPreview();S.pos=null;if(state.photos.length)await activate(state.photos[0]);else if(state.tracks.length)await focusTrack(state.tracks[0]);}
         dirty();});row.append(remove);root.append(row);

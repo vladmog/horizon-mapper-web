@@ -1,8 +1,8 @@
 "use strict";
 
-const CACHE = "horizon-mapper-shell-v3";
+const CACHE = "horizon-mapper-workspace-v1";
 const SHELL = [
-  "./", "./index.html", "./manifest.webmanifest", "./privacy.html",
+  "./", "./index.html", "./workspace.css", "./workspace.js", "./manifest.webmanifest", "./privacy.html",
   "./browser-profile.js", "./terrain-worker.js", "./horizon-core.js", "./pwa.js",
   "./diagnostics.js", "./log-sanitize.js", "./photo-location.js",
   "./satellite-map.js", "./terrain-game.js", "./terrain-view.js",

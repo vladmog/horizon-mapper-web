@@ -48,3 +48,11 @@ Drag the profile to change bearing; range changes remap automatically. The map,
 permission is required. Invalid input leaves the current mapped location intact.
 Use **Upload photo** or **Use device GPS** to switch back. Entered coordinates
 are a temporary viewpoint, not an asset saved in a photo/GPX project.
+
+## UI redesign branch
+
+The `redesign/terrain-workspace` branch reorganizes the app into a map and horizon workspace with Location, Project, and Settings panels. Phone controls open in a panel; desktop controls stay in a sidebar. Labels are direct and the interface is grayscale, with color retained for map data and meaningful status.
+
+All existing map modes and project operations remain available. Selecting device GPS now maps its first fix automatically; coordinates and photos still map immediately. GPS permissions are requested only after an explicit location action.
+
+See `docs/ui-redesign.md` for the acceptance criteria, browser checks, and device-testing limits. Run `npm ci` and `npm test` for the UI suite (install Playwright Chromium first on Linux).
