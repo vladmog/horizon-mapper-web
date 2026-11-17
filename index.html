@@ -131,7 +131,7 @@
         <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
         <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
         <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
-        <label class="game-speed"><span>Speed</span><select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+        <label class="game-speed"><span>Speed</span><input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-orientation="vertical" aria-valuetext="25 times normal speed"><output id="game-speed-value" for="game-speed">25×</output></label>
       </div>
       <div id="game-look" class="game-stick" role="group" aria-label="Look and aim. Swipe inside this circle to look around; holding still stops turning."><span class="stick-label">Look / aim</span></div>
     </div>
@@ -2070,7 +2070,12 @@ $('game-maps').onclick=()=>{
   if(point)openMap(point.lat,point.lon);
 };
 $('game-exit').onclick=()=>setMapView(gameReturnView);
-$('game-speed').onchange=()=>{if(terrainView?.game)terrainView.game.speedMultiplier=Number($('game-speed').value);};
+$('game-speed').oninput=()=>{
+  const speed=Number($('game-speed').value);
+  if(terrainView?.game)terrainView.game.speedMultiplier=speed;
+  $('game-speed-value').textContent=speed+'×';
+  $('game-speed').setAttribute('aria-valuetext',speed+' times normal speed');
+};
 $('game-respawn').onclick=()=>terrainView?.game?.reset();
 $('game-goto-target').onclick=()=>{
   const target=readoutTarget(),game=terrainView?.game;

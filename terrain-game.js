@@ -89,7 +89,7 @@ function gameFlightPlan(view, from, to) {
 class TerrainGame {
   constructor(view) {
     this.view=view;this.active=false;this.keys=new Set();this.pointers=new Map();
-    this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=10;
+    this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=25;
     this.bind();
   }
   start(position, bearing=0) {

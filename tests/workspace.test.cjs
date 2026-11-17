@@ -604,7 +604,7 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
     const up=await page.locator('[data-game-key="e"]').boundingBox(),down=await page.locator('[data-game-key="q"]').boundingBox();
     assert.equal(up.x,down.x);assert.ok(up.y+up.height<=down.y);
     assert.equal(await page.locator('[data-game-key="shift"]').count(),0);
-    await page.locator('#game-speed').selectOption('25');
+    await page.locator('#game-speed').evaluate(el=>{el.value='25';el.dispatchEvent(new Event('input',{bubbles:true}));});
     assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),25);
     await page.waitForTimeout(150);
     await page.screenshot({path:`/tmp/horizon-first-person-${size.width}.png`});
@@ -754,5 +754,28 @@ test("look circle matches scene drag sensitivity and does not rotate on an off-c
   await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx+20,cy-10,{steps:4});await page.mouse.up();
   assert.deepEqual(await state(),pad);
   assert.equal(await page.locator('#game-look .game-stick-thumb').count(),0);
+  await close(page);
+});
+
+test("vertical speed slider defaults to 25 and changes movement speed immediately", async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();await page.waitForFunction(()=>terrainView.game?.active);
+  const slider=page.locator('#game-speed');
+  assert.equal(await slider.inputValue(),'25');
+  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),25);
+  await slider.focus();await page.keyboard.press('ArrowUp');
+  assert.equal(await slider.inputValue(),'26');
+  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),26);
+  await page.keyboard.press('ArrowDown');assert.equal(await slider.inputValue(),'25');
+  await page.keyboard.press('End');assert.equal(await slider.inputValue(),'100');
+  await page.keyboard.press('Home');assert.equal(await slider.inputValue(),'1');
+  const r=await slider.boundingBox();
+  await page.mouse.click(r.x+r.width/2,r.y+r.height*.75);
+  const low=Number(await slider.inputValue());
+  await page.mouse.click(r.x+r.width/2,r.y+r.height*.25);
+  const high=Number(await slider.inputValue());assert.ok(high>low);
+  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),high);
+  assert.equal(await page.locator('#game-speed-value').innerText(),high+'×');
+  assert.equal(await slider.getAttribute('aria-valuetext'),high+' times normal speed');
   await close(page);
 });

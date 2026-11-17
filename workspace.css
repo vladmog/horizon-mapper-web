@@ -2090,7 +2090,7 @@ body.game-mode #view-compass-arrow { inset: 2px 13px; }
 #game-controls #game-maps { right: 6px; top: 66px; }
 #game-controls [data-game-key="e"] { left: 70px; bottom: 58px; }
 #game-controls [data-game-key="q"] { left: 70px; bottom: 10px; }
-#game-controls .game-actions > .game-speed { left: 18px; bottom: 36px; width: 48px; height: 44px; border-radius: 12px; }
+#game-controls .game-actions > .game-speed { left: 18px; bottom: 10px; width: 48px; height: 92px; border-radius: 12px; }
 @media (max-width:359px) {
   #game-controls .game-actions > .game-speed { left: 20px; width: 44px; }
 }
@@ -2098,3 +2098,17 @@ body.game-mode #view-compass-arrow { inset: 2px 13px; }
 #game-controls #game-look { box-shadow: none; background: #26262666; cursor: grab; }
 #game-controls #game-look.is-dragging { border-color: #fff; background: #ffffff18; cursor: grabbing; }
 #game-look .stick-label { top: 50%; bottom: auto; transform: translateY(-50%); }
+
+#game-controls #game-speed {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 32px;
+  height: 58px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: #ddd;
+  touch-action: none;
+}
+#game-speed-value { font: 10px/1.2 var(--mono); }
