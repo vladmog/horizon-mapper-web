@@ -183,6 +183,11 @@ class TerrainGame {
       this.position[0]=x;this.position[2]=z;
     }
     const floor=gameGround(this.view,this.position[0],this.position[2]);
+    // Leaving the ground enters flight before gravity can pull the player down.
+    // Match the existing 5 cm contact tolerance so tiny surface changes still ground normally.
+    if(!this.flying && this.position[1]*radius>floor+.05) {
+      this.flying=true;this.velocityY=0;
+    }
     if(this.flying) {
       this.position[1]=Math.min((floor+5000)/radius,Math.max(floor/radius,this.position[1]+rise*speed*dt/radius));
       if(rise<=0 && this.position[1]*radius<=floor+1e-6) {

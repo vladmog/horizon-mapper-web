@@ -48,3 +48,32 @@ test('launch progresses continuously, reaches the exact destination and can rero
   assert.equal(game.reset(),true);assert.equal(game.flight,null);assert.deepEqual(game.position,game.spawn);
   assert.equal(gameFlightPlan(view,game.position,[2,0,0]),null);
 });
+
+function walker(view,x,z=0) {
+  const game=Object.create(TerrainGame.prototype);
+  Object.assign(game,{view,position:[x,gameGround(view,x,z)/view.model.radius,z],
+    keys:new Set(['w']),pointers:new Map(),stick:{x:0,y:0},active:true,
+    yaw:-Math.PI/2,tilt:0,phase:0,velocityY:0,flying:false,speedMultiplier:100,lastTime:null});
+  return game;
+}
+test('walking off a hill at high speed enters flight immediately and holds altitude',()=>{
+  const game=walker(terrain(x=>x<0?200:0),-.01);
+  const height=game.position[1];
+  game.tick(0);game.tick(1000/60);
+  assert.equal(game.flying,true);assert.equal(game.velocityY,0);
+  assert.equal(game.position[1],height);
+  assert.ok(game.position[1]*1000>gameGround(game.view,game.position[0],game.position[2]));
+  game.keys.clear();game.tick(2000/60);
+  assert.equal(game.position[1],height);
+});
+test('grounded walking and deliberate descent still work with automatic flight',()=>{
+  const flat=walker(terrain(()=>0),0);flat.tick(0);flat.tick(1000/60);
+  assert.equal(flat.flying,false);assert.equal(flat.position[1],0);
+  const gentle=walker(terrain(x=>100-.2*x),0);gentle.speedMultiplier=1;
+  gentle.tick(0);gentle.tick(1000/60);assert.equal(gentle.flying,false);
+  flat.position[1]=.001;flat.velocityY=-10;flat.keys.clear();flat.step(1/120);
+  assert.equal(flat.flying,true);assert.equal(flat.velocityY,0);assert.equal(flat.position[1],.001);
+  flat.keys.add('q');flat.step(1/120);
+  assert.equal(flat.position[1],0);assert.equal(flat.flying,false);
+  flat.step(1/120);assert.equal(flat.flying,false);
+});
