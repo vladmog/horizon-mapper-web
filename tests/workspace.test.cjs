@@ -1492,3 +1492,57 @@ test('Walk Nav opens the current avatar location until a target is marked, then 
   assert.match(await page.locator('#game-maps').getAttribute('aria-label'),/avatar location in Gaia GPS/);
   await close(page);
 });
+
+test('marked laser targets render a sky beam anchored through movement and flight, and clear cleanly',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-target').disabled);
+  const capture=()=>page.evaluate(()=>{
+    const v=terrainView,gl=v.gl,draw=gl.drawArrays.bind(gl),calls=[];
+    gl.drawArrays=(mode,first,count)=>{
+      if(gl.getUniform(v.program,v.uniforms.mode)===5) {
+        const vertices=new Float32Array(count*5);gl.getBufferSubData(gl.ARRAY_BUFFER,0,vertices);
+        calls.push({base:[(vertices[0]+vertices[5])/2,vertices[1],(vertices[2]+vertices[7])/2],
+          height:vertices[11]-vertices[1],depth:gl.isEnabled(gl.DEPTH_TEST),blend:gl.isEnabled(gl.BLEND)});
+      }
+      draw(mode,first,count);
+    };
+    try {
+      v.dirty=true;v.render(readoutTarget(),HZ.P.hObs);
+      const pixels=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);
+      gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+      let beamPixels=0;
+      for(let i=0;i<pixels.length;i+=4)if(pixels[i+2]>210 && pixels[i+1]>140 && pixels[i+2]-pixels[i]>90)beamPixels++;
+      return {calls,beamPixels,error:gl.getError(),depthMask:gl.getParameter(gl.DEPTH_WRITEMASK),blending:gl.isEnabled(gl.BLEND),
+        expected:HZ.pinnedTarget?terrainPoint(v.model,HZ.pinnedTarget.point):null};
+    } finally {gl.drawArrays=draw;v.dirty=true;}
+  });
+  assert.equal((await capture()).calls.length,0,'aiming alone does not place a beacon');
+  await page.locator('#game-target').click();
+  const marked=await capture();
+  assert.equal(marked.calls.length,1);assert.ok(marked.beamPixels>100,'GPU renders the bright blue beam');
+  const verify=result=>{
+    assert.equal(result.error,0);assert.equal(result.calls.length,1);
+    assert.ok(Math.hypot(...result.calls[0].base.map((x,i)=>x-result.expected[i]))<1e-6,'beam foot matches marked terrain point');
+    assert.ok(result.calls[0].height>=2-1e-6);assert.ok(result.calls[0].depth && result.calls[0].blend);
+    assert.ok(result.depthMask);assert.equal(result.blending,false,'restore render state');
+  };
+  verify(marked);
+  await page.screenshot({path:'/tmp/horizon-target-beacon-portrait.png'});
+  await page.evaluate(()=>{const g=terrainView.game;g.position[0]+=.003;g.position[1]+=.01;g.flying=true;});
+  verify(await capture());
+  await page.locator('#game-goto-target').click();
+  await page.waitForFunction(()=>!!terrainView.game.flight);verify(await capture());
+  await page.waitForFunction(()=>!terrainView.game.flight);verify(await capture());
+  await page.evaluate(()=>{terrainView.game.thirdPerson=true;});verify(await capture());
+  await page.setViewportSize({width:844,height:390});await page.waitForTimeout(150);
+  await page.evaluate(()=>{const g=terrainView.game;g.thirdPerson=false;g.position[1]+=.03;g.tilt=.6;});
+  await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
+  await page.locator('#game-target').click();
+  const replaced=await capture();verify(replaced);
+  assert.notDeepEqual(replaced.expected,marked.expected,'new mark replaces old beam');
+  await page.screenshot({path:'/tmp/horizon-target-beacon-landscape.png'});
+  await page.locator('#game-exit').click();await page.locator('[data-v="perspective"]').click();
+  verify(await capture());
+  await page.evaluate(()=>clearSelection());assert.equal((await capture()).calls.length,0);
+  await close(page);
+});

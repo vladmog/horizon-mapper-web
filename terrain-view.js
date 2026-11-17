@@ -233,6 +233,22 @@ function terrainPerspectiveImageryPlans(model, camera, pixelHeight) {
   return plans;
 }
 
+// A vertical world-space billboard: its foot stays at the marked terrain point.
+// A small screen-space minimum keeps distant markers legible without widening
+// a nearby beam across the view. The shader supplies the soft edge and core.
+function terrainBeacon(model, point, camera, pixelHeight) {
+  const base=terrainPoint(model,point), radius=model.radius;
+  const offset=base.map((v,i)=>v-camera.eye[i]);
+  const depth=Math.max(camera.near,offset.reduce((sum,v,i)=>sum+v*camera.forward[i],0));
+  const halfHeight=camera.halfHeight || depth/camera.focal;
+  const width=Math.max(1.2/radius,halfHeight*12/Math.max(1,pixelHeight));
+  const length=Math.hypot(camera.right[0],camera.right[2]) || 1;
+  const side=[camera.right[0]/length,0,camera.right[2]/length];
+  const height=Math.max(2000/radius,2);
+  return new Float32Array([[-1,0],[1,0],[-1,1],[-1,1],[1,0],[1,1]].flatMap(([x,y])=>
+    [base[0]+side[0]*width*x,base[1]+height*y,base[2]+side[2]*width*x,x,y]));
+}
+
 class TerrainView {
   constructor(canvas, changed, failed, photoLook = () => {}) {
     this.canvas = canvas; this.changed = changed; this.failed = failed;
@@ -311,6 +327,14 @@ class TerrainView {
       uniform vec3 toolOrigin,toolRight,toolUp,toolForward; uniform float toolRadius;
       out vec4 fragColor;
       void main() {
+        if(mode==5) {
+          float edge=abs(vUV.x);
+          float core=exp(-edge*edge*110.);
+          float glow=pow(max(0.,1.-edge),2.);
+          float fade=1.-smoothstep(.65,1.,vUV.y);
+          fragColor=vec4(mix(vec3(.08,.65,1.),vec3(.8,.96,1.),core),
+            min(1.,core*.9+glow*.6)*fade);return;
+        }
         if(mode==1 || mode==2 || mode==4) {
           if(mode==2 && length(gl_PointCoord-vec2(.5))>.5) discard;
           fragColor=vec4(color,1.0); return;
@@ -598,7 +622,7 @@ class TerrainView {
     const gl=this.gl, r=this.canvas.getBoundingClientRect(), dpr=Math.min(3,window.devicePixelRatio||1);
     const w=Math.max(1,Math.round(r.width*dpr)),h=Math.max(1,Math.round(r.height*dpr));
     if (this.canvas.width!==w||this.canvas.height!==h) {this.canvas.width=w;this.canvas.height=h;this.dirty=true;}
-    const key=`${observerAltitude}/${target?`${target.point.lat}/${target.point.lon}/${target.point.elev}/${target.selected}`:''}`;
+    const key=`${observerAltitude}/${target?`${target.point.lat}/${target.point.lon}/${target.point.elev}/${target.selected}/${target.laserMarker}`:''}`;
     if(key!==this.lastTarget){this.lastTarget=key;this.dirty=true;}
     if(!this.dirty&&!this.textureDirty&&!this.detailDirty)return;
     this.dirty=false;gl.viewport(0,0,w,h);
@@ -725,6 +749,17 @@ class TerrainView {
       // Selected app targets share the same annotations in Game and orbit views.
       // The live laser remains a preview until the user places a target.
       if(!target?.selected){drawForeground?.();return;}
+    }
+    if(target?.selected && target.laserMarker) {
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.markerBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER,terrainBeacon(this.model,target.point,camera,h/dpr),gl.DYNAMIC_DRAW);
+      gl.vertexAttribPointer(0,3,gl.FLOAT,false,20,0);
+      gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,2,gl.FLOAT,false,20,12);
+      gl.disableVertexAttribArray(2);gl.disableVertexAttribArray(3);
+      gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.depthMask(false);
+      gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1i(this.uniforms.mode,5);gl.drawArrays(gl.TRIANGLES,0,6);
+      gl.disable(gl.BLEND);gl.depthMask(true);gl.depthFunc(gl.LESS);
     }
     // Overlay annotations stay legible even when the simplified surface differs
     // slightly from the exact DEM point used by the profile and readout.

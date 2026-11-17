@@ -905,13 +905,13 @@ function restoreObserverSelection(selection) {
     if(distance<nearest) { nearest=distance;layer=L; }
   }
   HZ.selLayer=layer;
-  if (nearest < 1e-8) { HZ.pinnedTarget=null; return; }
+  if (nearest < 1e-8 && !selection.laserMarker) { HZ.pinnedTarget=null; return; }
   // Keep the physical target even if the new observer height hides its ridge
   // or changes the visible-layer ordering. Only its sight angle changes.
   const point={...selection.point};
   point.ang=Math.atan2(Math.tan(point.ang*Math.PI/180)*point.dist+
     selection.altitude-HZ.P.hObs,point.dist)*180/Math.PI;
-  HZ.pinnedTarget={bearing:HZ.selAz,point};
+  HZ.pinnedTarget={bearing:HZ.selAz,point,laserMarker:!!selection.laserMarker};
 }
 
 function readoutTarget() {
@@ -919,7 +919,7 @@ function readoutTarget() {
   const selected = HZ.selAz != null;
   const b = binOf(selected ? HZ.selAz : curCenter());
   const L = selected ? Math.min(HZ.selLayer, nLay(b) - 1) : 0;
-  return { b, L, selected, point: selected && HZ.pinnedTarget?.bearing === HZ.selAz ? HZ.pinnedTarget.point : layAt(b, L) };
+  return { b, L, selected, laserMarker: selected && HZ.pinnedTarget?.bearing === HZ.selAz && !!HZ.pinnedTarget.laserMarker, point: selected && HZ.pinnedTarget?.bearing === HZ.selAz ? HZ.pinnedTarget.point : layAt(b, L) };
 }
 
 function updateReadout() {
@@ -2161,7 +2161,7 @@ function changePhotoObserver(height, customHeight = activeObserverSettings().cus
   if (!S.pos) return;
   const saved = observerRefreshView || (terrainView ? {mode: mapView, view: terrainView.captureView()} : null);
   if (saved && !saved.selection && HZ.P && HZ.selAz != null) {
-    saved.selection={bearing:HZ.selAz,point:{...readoutTarget().point},altitude:HZ.P.hObs};
+    saved.selection={bearing:HZ.selAz,point:{...readoutTarget().point},altitude:HZ.P.hObs,laserMarker:readoutTarget().laserMarker};
   }
   if (saved && !saved.origin && HZ.P) saved.origin={latitude:HZ.P.lat0,longitude:HZ.P.lon0,altitude:S.pos.coords.altitude};
   const modeViews = {...terrainModeViews};
@@ -2214,7 +2214,7 @@ $('game-target').onclick=()=>{
   const hit=game.laser().hit;if(!hit)return;
   const target=gameTarget(game,HZ.P.hObs,HZ.P.k ?? .13,hit);
   HZ.selAz=target.bearing;HZ.selLayer=0;HZ.pinnedTarget=target;
-  game.targetPlaced=true;mpFitSelection();
+  HZ.pinnedTarget.laserMarker=true;game.targetPlaced=true;mpFitSelection();
   $('game-goto-target').disabled=!game.targetDestination(target.point);
   updateGameNav();
   pulseTargetActions();
