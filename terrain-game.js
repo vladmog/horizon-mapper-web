@@ -92,15 +92,22 @@ class TerrainGame {
     this.thirdPerson=false;this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=25;
     this.bind();
   }
-  start(position, bearing=0) {
-    const point=terrainPoint(this.view.model,{...position,elev:0});
+  start(position, bearing=0, camera=null) {
+    const point=camera ? camera.eye : terrainPoint(this.view.model,{...position,elev:0});
     const ground=gameGround(this.view,point[0],point[2]);
     if(ground===null) throw new Error('Map the current location before starting Game.');
-    this.position=[point[0],ground/this.view.model.radius,point[2]];
-    this.spawn=[...this.position];this.yaw=-bearing*Math.PI/180;this.heading=this.yaw;
-    this.tilt=.24;this.phase=0;this.speed=0;this.velocityY=0;
+    const radius=this.view.model.radius;
+    // Camera altitude is eye level; physics tracks the avatar's feet.
+    this.position=[point[0],Math.max(ground,camera ? camera.eye[1]*radius-1.65 : ground)/radius,point[2]];
+    this.yaw=camera ? Math.atan2(-camera.forward[0],-camera.forward[2]) : -bearing*Math.PI/180;
+    this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
+    this.horizontalFov=camera?.horizontalFov ?? null;
+    if(camera)this.thirdPerson=false;
+    this.flying=this.position[1]*radius>ground+.05;
+    this.spawn=[...this.position];this.spawnFlying=this.flying;this.heading=this.yaw;
+    this.phase=0;this.speed=0;this.velocityY=0;
     window.getSelection?.()?.removeAllRanges();
-    this.flight=null;this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
+    this.flight=null;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
   stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
   clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.();this.resetLook?.(); }
@@ -111,7 +118,7 @@ class TerrainGame {
     return {distance,bearing:distance<.5?null:(Math.atan2(east,north)*180/Math.PI+360)%360,
       height:(this.position[1]-this.spawn[1])*radius};
   }
-  reset() { return this.beginFlight({position:[...this.spawn],flying:false},'start'); }
+  reset() { return this.beginFlight({position:[...this.spawn],flying:this.spawnFlying ?? false},'start'); }
   targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
     const position=terrainPoint(this.view.model,point);
@@ -227,7 +234,9 @@ class TerrainGame {
     // Keep a 60-degree horizontal view on portrait phones instead of cropping
     // the landscape camera down to a narrow slice. Landscape stays unchanged.
     const portrait=width>0 && width<=900 && height>width;
-    const focal=(portrait ? width/height : 1)/Math.tan(Math.PI/6);
+    const focal=this.horizontalFov
+      ? (width/height)/Math.tan(this.horizontalFov*Math.PI/360)
+      : (portrait ? width/height : 1)/Math.tan(Math.PI/6);
     return {eye,right,up,forward,focal,near:.05/radius,far:Math.max(4,eye[1]+4),halfHeight:0,groundElevation:gameGround(this.view,this.position[0],this.position[2])};
   }
   camera() {

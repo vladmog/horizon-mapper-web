@@ -1257,3 +1257,62 @@ test('system dark mode keeps controls readable and changes live without losing t
     await close(page);
   }
 });
+
+test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',async()=>{
+  for(const size of [{width:390,height:844},{width:844,height:390}])for(const source of ['coordinates','photo']) {
+    const page=await pageFor(size,true);
+    if(source==='coordinates') {
+      await mapCoordinates(page);await page.locator('[data-v="perspective"]').click();
+    } else {
+      const png=await page.evaluate(()=>{
+        window.exifr.gps=async()=>({latitude:48.8584,longitude:2.2945});
+        window.exifr.parse=async()=>({GPSLatitude:48.8584,GPSLongitude:2.2945,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.8584,longitude:2.2945});
+        const c=document.createElement('canvas');c.width=600;c.height=400;
+        return c.toDataURL('image/png').split(',')[1];
+      });
+      await page.locator('#photo-file').setInputFiles({name:'walk-start.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+      await page.waitForFunction(()=>S.locationSource==='photo' && !HZ.loading && mapView==='perspective');
+    }
+    await page.waitForFunction(()=>terrainView?.photoView && terrainView?.photoCamera);
+    await page.evaluate(()=>{
+      terrainView.lookPhoto(43,-27);terrainView.zoom(.7);
+      // A previous third-person session must not offset this camera handoff.
+      terrainView.game ||= new TerrainGame(terrainView);terrainView.game.thirdPerson=true;
+      window.__handoffProfile=HZ.P;
+    });
+    await page.waitForTimeout(150);
+    const before=await page.evaluate(()=>{
+      const camera=terrainView.photoCamera;
+      return {eye:camera.eye,forward:camera.forward,fov:terrainView.photoFov,
+        radius:terrainData.radius,ground:gameGround(terrainView,camera.eye[0],camera.eye[2]),
+        requests:window.__terrainRequests};
+    });
+    await page.locator('#map-game').click();
+    await page.waitForFunction(()=>terrainView.game.active && mapView==='game');
+    const after=await page.evaluate(()=>{
+      const game=terrainView.game,camera=game.camera();
+      return {eye:camera.eye,forward:camera.forward,fov:360/Math.PI*Math.atan((terrainView.canvas.clientWidth/terrainView.canvas.clientHeight)/camera.focal),
+        flying:game.flying,thirdPerson:game.thirdPerson,requests:window.__terrainRequests,sameProfile:HZ.P===window.__handoffProfile};
+    });
+    assert.equal(after.thirdPerson,false);
+    for(let i=0;i<3;i++) {
+      const expected=i===1?Math.max(before.eye[i],(before.ground+1.65)/before.radius):before.eye[i];
+      assert.ok(Math.abs(after.eye[i]-expected)<1e-9,`${source} camera eye axis ${i}`);
+      assert.ok(Math.abs(after.forward[i]-before.forward[i])<1e-9,`${source} aim axis ${i}`);
+    }
+    assert.ok(Math.abs(after.fov-before.fov)<1e-8);
+    assert.equal(after.flying,before.eye[1]*before.radius>before.ground+1.70);
+    assert.equal(after.requests,before.requests);assert.equal(after.sameProfile,true);
+    await page.waitForTimeout(200);
+    assert.ok(await page.evaluate(eye=>Math.abs(terrainView.game.camera().eye[1]-eye[1])<1e-9,after.eye),'elevated camera must not fall');
+    await page.evaluate(()=>{
+      const game=terrainView.game;game.position[0]+=10/terrainData.radius;
+      game.reset();for(let i=0;i<1000 && game.flight;i++)game.advanceFlight(1/120);
+    });
+    assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
+    assert.equal(await page.evaluate(()=>terrainView.game.flying),after.flying);
+    await page.locator('#game-exit').click();
+    await page.waitForFunction(()=>mapView==='perspective');
+    await close(page);
+  }
+});
