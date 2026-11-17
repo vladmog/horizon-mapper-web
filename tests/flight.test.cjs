@@ -77,3 +77,17 @@ test('grounded walking and deliberate descent still work with automatic flight',
   assert.equal(flat.position[1],0);assert.equal(flat.flying,false);
   flat.step(1/120);assert.equal(flat.flying,false);
 });
+
+
+test('position relative to start uses horizontal distance, compass direction, and signed height',()=>{
+  const game=Object.create(TerrainGame.prototype);
+  game.view={model:{radius:1000}};game.spawn=[.2,.4,.3];
+  for(const [offset,bearing] of [[[0,0,-.1],0],[[.1,0,0],90],[[0,0,.1],180],[[-.1,0,0],270]]) {
+    game.position=game.spawn.map((v,i)=>v+offset[i]);
+    const relative=game.relativeToStart();
+    assert.ok(Math.abs(relative.distance-100)<1e-8);assert.ok(Math.abs(relative.bearing-bearing)<1e-8);
+  }
+  game.position=[.2,.35,.3];
+  assert.equal(game.relativeToStart().distance,0);assert.equal(game.relativeToStart().bearing,null);
+  assert.ok(Math.abs(game.relativeToStart().height+50)<1e-8);
+});

@@ -805,3 +805,27 @@ test("top-right camera toggle restores third person without moving the player or
   assert.equal(await button.innerText(),'3rd person');
   await close(page);
 });
+
+
+test("Walk status reports position from start independently of aim and target",async()=>{
+  const page=await pageFor({width:320,height:568},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();await page.waitForFunction(()=>terrainView.game?.active);
+  assert.equal(await page.locator('#game-start-distance').innerText(),'0 m');
+  assert.equal(await page.locator('#game-start-height').innerText(),'Same elevation');
+  await page.evaluate(()=>{
+    const game=terrainView.game,r=terrainView.model.radius;
+    game.position=[game.spawn[0]+1000/r,game.spawn[1]+100/r,game.spawn[2]-1000/r];
+    game.flying=true;game.velocityY=0;game.yaw=2;game.targetPlaced=true;MP.dirty=true;
+  });
+  await page.waitForFunction(()=>document.getElementById('game-start-distance').textContent==='0.88 mi NE');
+  assert.equal(await page.locator('#game-start-height').innerText(),'100 m above');
+  assert.ok((await page.locator('.game-header').boundingBox()).height<=65);
+  assert.doesNotMatch(await page.locator('#game-status').innerText(),/Flying|On foot|m\/s|above ground|Target placed/);
+  await page.waitForTimeout(150);await page.screenshot({path:'/tmp/horizon-relative-status.png'});
+  await page.evaluate(()=>{
+    const game=terrainView.game;game.position=[...game.spawn];game.yaw=-1;game.flying=false;MP.dirty=true;
+  });
+  await page.waitForFunction(()=>document.getElementById('game-start-distance').textContent==='0 m');
+  assert.equal(await page.locator('#game-start-height').innerText(),'Same elevation');
+  await close(page);
+});

@@ -117,7 +117,7 @@
     <button id="sat-retry" hidden>Retry imagery</button>
   </div>
   <div id="game-controls" hidden>
-    <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status" role="status"></div></div>
+    <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status"><span>From start</span><span id="game-start-distance"></span><span id="game-start-height"></span></div></div>
     <button id="game-camera" type="button" aria-label="Use third-person view" aria-pressed="false">3rd person</button>
     <div id="game-reticle" aria-hidden="true"><span></span></div>
     <div id="game-laser-status" role="status">Aim the laser at terrain</div>
@@ -1625,7 +1625,7 @@ function drawTerrainView() {
   try {
     if (mapView === "perspective") terrainView.setPhotoView(perspectiveSource());
     if(mapView==='game' && terrainView.game?.active) {
-      const game=terrainView.game,ground=gameGround(terrainView,game.position[0],game.position[2]);
+      const game=terrainView.game;
       const markedTarget=readoutTarget();
       $('game-maps').disabled=!selectedGameMapPoint();
       $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
@@ -1637,7 +1637,12 @@ function drawTerrainView() {
       $('game-reticle').classList.toggle('has-hit',!!laserHit);
       const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*terrainData.radius:0;
       $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':miles(distance).toFixed(2)+' mi'}`:'No terrain hit — aim lower';
-      $('game-status').textContent=`${game.flight?'Flying to '+game.flight.label:game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
+      const relative=game.relativeToStart(),height=Math.round(relative.height);
+      const direction=relative.bearing===null?'':CARDINALS[Math.round(relative.bearing/22.5)%16];
+      const range=relative.distance<1000?Math.round(relative.distance)+' m':miles(relative.distance).toFixed(2)+' mi';
+      $('game-start-distance').textContent=range+(direction?' '+direction:'');
+      $('game-start-height').textContent=height===0?'Same elevation':Math.abs(height)+' m '+(height>0?'above':'below');
+      $('game-status').title='Position relative to start: horizontal distance and direction, then elevation difference';
     }
     terrainView.render(readoutTarget(), HZ.P?.hObs ?? (HZ.P ? HZ.P.ground + HZ.P.eye : 0));
     updateViewCompass();

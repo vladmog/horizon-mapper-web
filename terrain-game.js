@@ -103,6 +103,13 @@ class TerrainGame {
   }
   stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
   clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.();this.resetLook?.(); }
+  relativeToStart() {
+    const radius=this.view.model.radius;
+    const east=(this.position[0]-this.spawn[0])*radius,north=(this.spawn[2]-this.position[2])*radius;
+    const distance=Math.hypot(east,north);
+    return {distance,bearing:distance<.5?null:(Math.atan2(east,north)*180/Math.PI+360)%360,
+      height:(this.position[1]-this.spawn[1])*radius};
+  }
   reset() { return this.beginFlight({position:[...this.spawn],flying:false},'start'); }
   targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
