@@ -2076,3 +2076,21 @@ body.game-mode #view-compass-arrow { inset: 2px 13px; }
 .travel-label { grid-column: 1 / -1; text-align: center; font-size: 9px; color: #ddd; }
 #game-controls .game-travel button { border: 0; background: #ffffff0a; }
 @media (max-width:359px) { .game-right { gap: 8px; } }
+
+/* The look stick anchors an open cluster, with no enclosing control panel. */
+.game-right { display: block; width: 228px; height: 228px; }
+#game-controls .game-actions { position: absolute; inset: 0; display: block; }
+#game-controls #game-look { position: absolute; right: 0; bottom: 0; left: auto; top: auto; }
+#game-controls .game-actions > button,
+#game-controls .game-actions > .game-speed,
+#game-controls .game-actions > .game-travel { position: absolute; }
+#game-controls .game-actions > button { width: 48px; height: 44px; border-radius: 12px; }
+#game-controls .game-actions #game-target { right: 14px; top: 4px; width: 110px; border-radius: 22px; }
+#game-controls .game-travel { left: 0; top: 56px; width: 112px; border-radius: 12px; }
+#game-controls #game-maps { right: 6px; top: 66px; }
+#game-controls [data-game-key="e"] { left: 70px; bottom: 58px; }
+#game-controls [data-game-key="q"] { left: 70px; bottom: 10px; }
+#game-controls .game-actions > .game-speed { left: 18px; bottom: 36px; width: 48px; height: 44px; border-radius: 12px; }
+@media (max-width:359px) {
+  #game-controls .game-actions > .game-speed { left: 20px; width: 44px; }
+}

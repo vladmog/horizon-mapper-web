@@ -588,8 +588,14 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
     }
     assert.ok((await page.locator('.game-header').boundingBox()).height<=65);
     const controls=await page.locator('.game-actions').boundingBox(),look=await page.locator('#game-look').boundingBox();
-    if(size.width>size.height)assert.ok(look.x>=controls.x+controls.width);
-    else assert.ok(look.y>=controls.y+controls.height);
+    const targets=await page.locator('#game-target').boundingBox();
+    assert.ok(targets.y+targets.height<=look.y);
+    const interactive=['#game-stick','#game-look','#game-target','#game-respawn','#game-goto-target','#game-maps','#game-speed','[data-game-key="e"]','[data-game-key="q"]'];
+    const boxes=await Promise.all(interactive.map(selector=>page.locator(selector).boundingBox()));
+    for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++) {
+      const a=boxes[i],b=boxes[j];
+      assert.ok(a.x+a.width<=b.x+.5 || b.x+b.width<=a.x+.5 || a.y+a.height<=b.y+.5 || b.y+b.height<=a.y+.5,`Overlapping ${interactive[i]} and ${interactive[j]}`);
+    }
     const up=await page.locator('[data-game-key="e"]').boundingBox(),down=await page.locator('[data-game-key="q"]').boundingBox();
     assert.equal(up.x,down.x);assert.ok(up.y+up.height<=down.y);
     assert.equal(await page.locator('[data-game-key="shift"]').count(),0);
@@ -644,5 +650,31 @@ test("movement and aiming sticks work simultaneously and release on interruption
     await page.mouse.up();
     assert.equal(await page.evaluate(key=>terrainView.game.keys.has(key),key),false);
   }
+  await close(page);
+});
+
+test("Viewpoint selection uses the horizon fit when returning to Map", async () => {
+  const page=await pageFor({width:844,height:390},true);
+  await mapCoordinates(page);
+  await page.locator('#mp-zoom [data-k="4"]').click();
+  await page.locator('#map-perspective').click();
+  await page.waitForFunction(()=>mapView==='perspective' && terrainView.photoCamera);
+  const rect=await page.locator('#mp3d').boundingBox();
+  await page.locator('#mp3d').click({position:{x:rect.width/2,y:rect.height*.8}});
+  await page.waitForFunction(()=>HZ.pinnedTarget!==null);
+  await page.locator('[data-v="2d"]').click();
+  await page.waitForFunction(()=>mapView==='2d' && MP.zoom===0);
+  const actual=await page.evaluate(()=>({k:MP.k,cx:MP.cx,cy:MP.cy,zoom:MP.zoom}));
+  const expected=await page.evaluate(()=>{
+    mpFitSelection();
+    return {k:MP.k,cx:MP.cx,cy:MP.cy,zoom:MP.zoom};
+  });
+  assert.deepEqual(actual,expected);
+  const bounds=await page.evaluate(()=>{
+    const p=readoutTarget().point;
+    return {a:[mpX(MP.lon0),mpY(MP.lat0)],b:[mpX(p.lon),mpY(p.lat)],w:mw,h:mh};
+  });
+  for(const point of [bounds.a,bounds.b])assert.ok(point[0]>=0 && point[0]<=bounds.w && point[1]>=0 && point[1]<=bounds.h);
+  assert.ok(Math.hypot(bounds.a[0]-bounds.b[0],bounds.a[1]-bounds.b[1])>Math.min(bounds.w,bounds.h)*.5);
   await close(page);
 });
