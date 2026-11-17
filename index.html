@@ -85,59 +85,7 @@
 
 <div id="foot" class="sub"></div></div>
 <div class="panel-body" id="panel-project" data-tool-panel="project" hidden><div id="project-mount"></div></div>
-<div class="panel-body" id="panel-settings" data-tool-panel="settings" hidden><section class="card"><div class="section-heading"><span class="eyebrow">Preferences</span><h2>Settings</h2><p class="sub">Map links, controls, and diagnostics.</p></div><h3>Preferred map app</h3>  <div class="hz-row">
-    <label>Open in</label>
-    <div class="seg" id="map-app">
-      <button data-a="apple" class="on">Apple</button><button data-a="google">Google</button
-      ><button data-a="gaia">Gaia</button>
-    </div>
-  </div>
-<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
-</aside>
-<main id="workspace" tabindex="-1"><div class="workspace-heading"><div><h1>Explore</h1></div><div class="workspace-status"><span class="pill" id="pill-motion">SENSORS</span><span class="pill" id="pill-gps">GPS</span></div></div><div class="card" id="card-map">
-  <div class="surface-heading"><div><h2>Map</h2></div><span id="mp-meta" class="sub"></span></div>
-  <div class="hz-row" id="map-view-row">
-    <div class="seg" id="map-view" aria-label="Map view">
-      <button data-v="2d" class="on" aria-pressed="true">Map</button><button data-v="3d" aria-pressed="false">Terrain</button>
-      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Map a location to use its viewpoint">Viewpoint</button>
-      <button data-v="game" id="map-game" aria-pressed="false" disabled>Walk</button>
-    </div>
-    <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
-    <span class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</span>
-  </div>
-  <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
-    <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
-<section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
-    <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
-    <div id="terrain-empty" class="sub" hidden></div>
-    <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
-  </div>
-  <div class="hz-row">
-    <span class="sub" id="sat-status" role="status" aria-live="polite"></span>
-    <button id="sat-retry" hidden>Retry imagery</button>
-  </div>
-  <div id="game-controls" hidden>
-    <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status"><span>From start</span><span id="game-start-distance"></span><span id="game-start-height"></span></div></div>
-    <button id="game-camera" type="button" aria-label="Use third-person view" aria-pressed="false">3rd person</button>
-    <div id="game-reticle" aria-hidden="true"><span></span></div>
-    <div id="game-laser-status" role="status">Aim the laser at terrain</div>
-    <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
-    <div class="game-right">
-      <div class="game-actions" aria-label="Laser and movement controls">
-        <button id="game-target" class="laser-action" aria-label="Mark the terrain point hit by the laser"><span class="control-icon" aria-hidden="true">⊕</span><span class="control-label">Mark laser</span></button>
-        <div class="game-travel" role="group" aria-label="Fly to destination"><span class="travel-label">Fly to</span>
-          <button id="game-respawn" aria-label="Fly to start"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Start</span></button>
-          <button id="game-goto-target" disabled aria-label="Fly to marked target"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Target</span></button>
-        </div>
-        <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
-        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
-        <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
-        <label class="game-speed"><span>Speed</span><input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-orientation="vertical" aria-valuetext="25 times normal speed"><output id="game-speed-value" for="game-speed">25×</output></label>
-      </div>
-      <div id="game-look" class="game-stick" role="group" aria-label="Look and aim. Swipe inside this circle to look around; holding still stops turning."><span class="stick-label">Look / aim</span></div>
-    </div>
-  </div>
-  <div class="hz-row">
+<div class="panel-body" id="panel-settings" data-tool-panel="settings" hidden><section class="card"><div class="section-heading"><span class="eyebrow">Preferences</span><h2>Settings</h2><p class="sub">Map links, controls, and diagnostics.</p></div></section><section class="card" id="map-settings"><h3>Map & view</h3>  <div class="hz-row">
     <label>Map radius</label>
     <div class="seg" id="hz-range">
       <button data-r="24140.16">15</button><button data-r="48280.32" class="on">30</button
@@ -175,11 +123,64 @@
       <button id="terrain-reload" hidden>Reload terrain</button>
     </div>
     <p class="sub" id="terrain-status" role="status"></p>
-  </details>
+  </details><p class="sub" id="terrain-hint" hidden>Drag to orbit · Pinch to zoom / move</p></section><section class="card"><h3>Preferred map app</h3>  <div class="hz-row">
+    <label>Open in</label>
+    <div class="seg" id="map-app">
+      <button data-a="apple" class="on">Apple</button><button data-a="google">Google</button
+      ><button data-a="gaia">Gaia</button>
+    </div>
+  </div>
+<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
+</aside>
+<main id="workspace" tabindex="-1"><div class="workspace-heading"><div><h1>Explore</h1></div><div class="workspace-status"><span class="pill" id="pill-motion">SENSORS</span><span class="pill" id="pill-gps">GPS</span></div></div><div id="view-panes"><div class="card" id="card-map">
+  <span id="mp-meta" hidden></span>
+  <div class="hz-row" id="map-view-row">
+    <div class="seg" id="map-view" aria-label="Map view">
+      <button data-v="2d" class="on" aria-pressed="true">Map</button><button data-v="3d" aria-pressed="false">Terrain</button>
+      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Map a location to use its viewpoint">Viewpoint</button>
+      <button data-v="game" id="map-game" aria-pressed="false" disabled>Walk</button>
+    </div>
+    <button id="map-fullscreen" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">⛶</button>
+  </div>
+  <div id="map-utilities"><button id="map-fit" type="button" title="Fit view">Fit</button><button id="map-settings-open" type="button" aria-label="Map settings" title="Map settings">⋯</button></div>
+  <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
+    <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
+<section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
+    <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
+    <div id="terrain-empty" class="sub" hidden></div>
+    <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
+  </div>
+  <div class="hz-row" id="satellite-status-row">
+    <span class="sub" id="sat-status" role="status" aria-live="polite"></span>
+    <button id="sat-retry" hidden>Retry imagery</button>
+  </div>
+  <div id="game-controls" hidden>
+    <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status"><span>From start</span><span id="game-start-distance"></span><span id="game-start-height"></span></div></div>
+    <button id="game-camera" type="button" aria-label="Use third-person view" aria-pressed="false">3rd person</button>
+    <div id="game-reticle" aria-hidden="true"><span></span></div>
+    <div id="game-laser-status" role="status">Aim the laser at terrain</div>
+    <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
+    <div class="game-right">
+      <div class="game-actions" aria-label="Laser and movement controls">
+        <button id="game-target" class="laser-action" aria-label="Mark the terrain point hit by the laser"><span class="control-icon" aria-hidden="true">⊕</span><span class="control-label">Mark laser</span></button>
+        <div class="game-travel" role="group" aria-label="Fly to destination"><span class="travel-label">Fly to</span>
+          <button id="game-respawn" aria-label="Fly to start"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Start</span></button>
+          <button id="game-goto-target" disabled aria-label="Fly to marked target"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Target</span></button>
+        </div>
+        <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
+        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
+        <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
+        <label class="game-speed"><span>Speed</span><input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-orientation="vertical" aria-valuetext="25 times normal speed"><output id="game-speed-value" for="game-speed">25×</output></label>
+      </div>
+      <div id="game-look" class="game-stick" role="group" aria-label="Look and aim. Swipe inside this circle to look around; holding still stops turning."><span class="stick-label">Look / aim</span></div>
+    </div>
+  </div>
+
 </div>
 
 <div class="card" id="card-horizon">
-  <div class="surface-heading"><div><h2>Horizon</h2></div><span id="hz-meta" class="sub"></span></div>
+  <span id="hz-meta" hidden></span>
+  <div id="comparison-toolbar"><span id="comparison-label">Horizon</span><div class="seg" aria-label="Comparison view"><button id="comparison-photo" type="button" aria-pressed="false" hidden>Photo</button><button id="comparison-horizon" type="button" class="on" aria-pressed="true">Horizon</button></div><button id="photo-fit" type="button" hidden>Fit photo</button></div>
   <figure id="photo-reference" hidden>
     <div id="photo-viewport">
       <img id="photo-preview" alt="Uploaded photo for comparison with the horizon" draggable="false">
@@ -188,8 +189,11 @@
     <div class="sub" id="photo-preview-status" role="status"></div>
   </figure>
   <div id="hz-wrap"><span id="horizon-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="hz" aria-label="Horizon profile. Drag to change bearing; tap a ridge to inspect its location."></canvas><div id="live-readout" hidden aria-label="Live aim"><span class="live-label">Live aim</span><div class="live-metrics"><div><span>Bearing</span><strong id="live-az">—</strong></div><div><span>Elevation angle</span><strong id="live-el">—</strong></div><div><span>Distance</span><strong id="live-d">—</strong></div><div><span>Altitude</span><strong id="live-h">—</strong></div></div></div></div>
-  <div class="sub" id="pan-hint" >Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
   <div id="hz-status">Waiting for a GPS fix…</div>
+</div></div>
+<section id="inspection-panel" aria-label="Point details and skyline settings">
+  <div class="sub" id="pan-hint" >Slide the profile to align with a landmark. Live compass panning keeps your correction.</div>
+
 
   <div id="hz-readout" tabindex="-1" aria-label="Selected point details"><div class="readout-heading"><span class="eyebrow" id="readout-title">Point details</span><button id="r-clear" type="button">Clear selection</button></div>
     <div id="r-peak" style="font-weight:650;margin-bottom:9px" hidden></div>
@@ -233,7 +237,7 @@
     <button id="hz-nudge-reset">Reset</button>
   </div>
 </details>
-</div>
+</section>
 
 </main></div>
 <div id="panel-backdrop" hidden></div>
@@ -1481,7 +1485,9 @@ function setMapFullscreen(expanded) {
   if (expanded) mapScrollY = window.scrollY;
   mapFullscreen = expanded;
   document.body.classList.toggle('map-fullscreen', expanded);
-  $('map-fullscreen').textContent = expanded ? 'Exit full screen' : 'Full screen';
+  $('map-fullscreen').textContent = '⛶';
+  $('map-fullscreen').setAttribute('aria-label',expanded?'Exit full screen':'Full screen');
+  $('map-fullscreen').title=expanded?'Exit full screen':'Full screen';
   $('map-fullscreen').setAttribute('aria-pressed', String(expanded));
   MP.dirty = true;
   requestAnimationFrame(() => {
@@ -1691,7 +1697,8 @@ function clearPhotoPreview() {
   if (photoPreviewURL) URL.revokeObjectURL(photoPreviewURL);
   photoPreviewURL = null;
   $("photo-reference").hidden = true;
-  document.body.classList.remove("photo-mode");
+  document.body.classList.remove("photo-mode", "compare-horizon");
+  window.HorizonUI?.updateComparison();
 }
 function showPhotoPreview(file) {
   clearPhotoPreview();
@@ -1699,6 +1706,7 @@ function showPhotoPreview(file) {
   photoPreviewURL = url;
   $("photo-reference").hidden = false;
   document.body.classList.add("photo-mode");
+  window.HorizonUI?.updateComparison();
   $("photo-caption").textContent = file.name;
   $("photo-preview-status").textContent = "Loading photo preview…";
   img.hidden = false;
@@ -1777,6 +1785,7 @@ $("coordinate-form").onsubmit = event => {
   ++photoRequest;
   resetLocationOutput();
   clearPhotoPreview();
+  if(mapView!=="2d")setMapView("2d");
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null;
   S.locationSource = "coordinates"; S.photoName = "";

@@ -519,7 +519,7 @@ details > p {
 .pill.bad {
   color: var(--bad);
 }
-#workspace > .card {
+#view-panes > .card {
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1333,7 +1333,7 @@ body.game-mode #view-compass {
   .surface-heading {
     margin-bottom: 14px;
   }
-  #workspace > .card {
+  #view-panes > .card {
     padding: 16px;
   }
   #mp,
@@ -1488,7 +1488,7 @@ body.game-mode #view-compass {
   .workspace-heading .eyebrow {
     font-size: 9px;
   }
-  #workspace > .card {
+  #view-panes > .card {
     padding: 12px;
     border-radius: 12px;
     margin-bottom: 14px;
@@ -1861,109 +1861,6 @@ body.game-mode #mp3d {
   }
 }
 
-/* On landscape phones, give the map space before secondary controls. */
-@media (max-width: 900px) and (max-height: 520px) and (orientation: landscape) {
-  .app-header { height: 48px; }
-  #workspace { padding: 12px 12px 64px; }
-  .workspace-heading, #card-map > .surface-heading, #terrain-hint { display: none; }
-  #workspace > .card { padding: 10px; }
-  #map-view-row { margin-bottom: 8px; }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #mp,
-  body.has-location:not(.map-fullscreen):not(.game-mode) #mp3d {
-    height: calc(100dvh - 168px);
-    min-height: 180px;
-  }
-}
-
-/* Show both geographic views together on landscape phones. */
-@media (orientation: landscape) and (max-height: 520px) {
-  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-    align-items: start;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) .workspace-heading {
-    grid-column: 1 / -1;
-    margin-bottom: 0;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace > .card {
-    margin-bottom: 0;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #card-map {
-    position: relative;
-    grid-column: 1;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #card-horizon {
-    grid-column: 2;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #card-map > .surface-heading {
-    display: flex;
-    min-height: 36px;
-    padding-right: 92px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #map-fullscreen {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    min-height: 36px;
-    padding: 8px;
-    font-size: 11px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #map-view {
-    width: 100%;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #map-view button {
-    flex: 1;
-    min-width: 0;
-    padding-inline: 5px;
-    font-size: 11px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #map-zoom-row {
-    display: flex;
-    margin-left: 0;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #mp,
-  body.has-location:not(.map-fullscreen):not(.game-mode) #mp3d,
-  body.has-location:not(.map-fullscreen):not(.game-mode) #hz {
-    height: clamp(180px, 40dvh, 460px);
-    min-height: 0;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) .hz-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #hz-readout .btns {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #r-clear {
-    grid-column: 1 / -1;
-    margin: 0;
-  }
-}
-@media (orientation: landscape) and (max-height: 520px) {
-  body.has-location:not(.map-fullscreen):not(.game-mode) #workspace {
-    gap: 10px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) .surface-heading {
-    min-height: 36px;
-    margin-bottom: 8px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) .surface-heading h2 {
-    font-size: 18px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #mp-meta {
-    display: none;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #map-fullscreen {
-    top: 10px;
-    right: 10px;
-  }
-  body.has-location:not(.map-fullscreen):not(.game-mode) #card-horizon:not(:has(#photo-reference:not([hidden]))) #hz-wrap {
-    margin-top: 58px;
-  }
-}
-
 /* Selection actions stay beside the point, above the optional peak list. */
 .selection-tools {
   position: absolute;
@@ -2118,3 +2015,96 @@ body.game-mode #view-compass-arrow { inset: 2px 13px; }
 @media (max-width:520px) { #game-camera { top: max(10px, env(safe-area-inset-top)); } }
 
 #game-status span { display: block; }
+
+/* Loaded workspace: equal views, with controls placed on their own surface. */
+body.has-location { --workspace-top: 48px; --workspace-bottom: 0px; }
+body.has-location .app-header { height: var(--workspace-top); padding-inline: 16px; }
+body.has-location .brand { font-size: 17px; }
+body.has-location .brand svg { width: 26px; height: 26px; }
+body.has-location .brand-sub { display: none; }
+body.has-location #sidebar { top: var(--workspace-top); max-height: calc(100dvh - var(--workspace-top)); }
+body.has-location .app-layout { max-width: none; }
+body.has-location #workspace { display: block; padding: 0 0 var(--workspace-bottom); }
+body.has-location .workspace-heading { display: none; }
+body.has-location #view-panes {
+  display: grid; grid-template-rows: repeat(2,minmax(0,1fr)); grid-template-columns: minmax(0,1fr);
+  height: calc(100dvh - var(--workspace-top) - var(--workspace-bottom)); gap: 2px;
+  background: var(--line);
+}
+body.has-location:not(.map-fullscreen):not(.game-mode) #view-panes > .card {
+  position: relative; min-height: 0; min-width: 0; padding: 0; margin: 0; border: 0; border-radius: 0;
+}
+body.has-location:not(.map-fullscreen):not(.game-mode) #mp-wrap,
+body.has-location #hz-wrap,
+body.has-location #photo-reference,
+body.has-location #photo-viewport { height: 100%; min-height: 0; margin: 0; border-radius: 0; }
+body.has-location:not(.map-fullscreen):not(.game-mode) #mp,
+body.has-location:not(.map-fullscreen):not(.game-mode) #mp3d,
+body.has-location #hz { height: 100%; min-height: 0; }
+body.has-location #photo-reference { display: block; position: relative; background: #111; }
+body.photo-mode:not(.compare-horizon) #hz-wrap,
+body.photo-mode.compare-horizon #photo-reference { display: none; }
+body.has-location #photo-caption { position: absolute; bottom: 4px; left: 10px; right: 10px; color: #eee; text-shadow: 0 1px 3px #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+body.has-location #photo-preview-status:not(:empty) { position: absolute; top: 60px; left: 12px; right: 12px; padding: 10px; background: #fff; border-radius: 8px; }
+body.has-location #map-view-row {
+  position: absolute; z-index: 5; top: max(8px,env(safe-area-inset-top)); left: 8px; right: 8px;
+  display: flex; flex-wrap: nowrap; gap: 6px; padding: 0; margin: 0; background: none; pointer-events: none;
+}
+body.has-location #map-view { display: flex; width: auto; flex: 0 1 auto; padding: 2px; gap: 0; border: 1px solid #aaa; border-radius: 10px; background: #fafafaf2; pointer-events: auto; box-shadow: 0 1px 5px #0002; }
+body.has-location #map-view button { min-width: 0; min-height: 40px; padding: 8px 10px; font-size: 12px; flex: 0 0 auto; }
+body.has-location #map-fullscreen { position: static; flex: none; width: 44px; height: 44px; margin-left: auto; padding: 0; background: #fafafaf2; border: 1px solid #aaa; border-radius: 10px; font: 25px/1 system-ui; pointer-events: auto; }
+#map-utilities { display: none; }
+body.has-location #map-utilities { display: flex; position: absolute; right: 8px; bottom: 36px; gap: 5px; z-index: 4; }
+#map-utilities button { min-width: 44px; padding: 8px; font-size: 12px; background: #fafafaf2; box-shadow: 0 1px 5px #0002; border-color: #aaa; }
+#map-settings-open { font-size: 22px !important; }
+body.has-location #map-tap-hint, body.has-location #mp-wrap .selection-tools { top: 62px; }
+body.has-location:not(.game-mode) #view-compass { top: 62px; right: 8px; width: 36px; height: 36px; }
+body.has-location:not(.game-mode) #view-compass-arrow { inset: 4px 16px; }
+body.has-location #satellite-status-row { position: absolute; bottom: 36px; left: 8px; right: 110px; margin: 0; z-index: 3; pointer-events: none; }
+body.has-location #satellite-status-row:has(#sat-status:empty):has(#sat-retry[hidden]) { display: none; }
+body.has-location #sat-status:not(:empty) { background: #fffffff0; border-radius: 4px; padding: 3px 5px; font-size: 10px; }
+body.has-location #sat-retry { pointer-events: auto; }
+#comparison-toolbar { display: none; }
+body.has-location #comparison-toolbar { position: absolute; z-index: 4; top: 8px; left: 8px; right: 8px; display: flex; gap: 5px; pointer-events: none; }
+#comparison-toolbar .seg { background: #fafafaf2; border: 1px solid #aaa; box-shadow: 0 1px 5px #0002; }
+#comparison-toolbar button { pointer-events: auto; font-size: 12px; min-height: 40px; }
+#photo-fit { margin-left: auto; background: #fafafaf2; }
+body.has-location #horizon-tap-hint, body.has-location #hz-wrap .selection-tools { top: 60px; }
+body.has-location #hz-status { position: absolute; z-index: 2; bottom: 8px; left: 8px; right: 130px; margin: 0; font-size: 11px; background: #fffffff0; border-radius: 4px; }
+body.has-location #hz-status:not(:empty) { padding: 4px 6px; }
+body.photo-mode:not(.compare-horizon) #hz-status:not(.err) { display: none; }
+#inspection-panel { margin-top: 12px; }
+body.has-location #inspection-panel { padding: 12px; margin: 0; }
+#map-settings { scroll-margin-top: 68px; }
+#map-settings #map-zoom-row { margin-left: 0; }
+body:not(.has-location) #map-view-row,
+body:not(.has-location) #inspection-panel { display: none; }
+/* Fullscreen retains the same overlay controls and uses the whole surface. */
+body.map-fullscreen:not(.game-mode) #card-map > #map-utilities { display: flex !important; }
+body.map-fullscreen:not(.game-mode) #mp-wrap { height: 100%; flex: 1; }
+body.game-mode #map-utilities { display: none; }
+@media (orientation: landscape) {
+  body.has-location #view-panes { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: minmax(0,1fr); }
+}
+@media (max-width:900px) {
+  body.has-location { --workspace-top: 0px; --workspace-bottom: calc(52px + env(safe-area-inset-bottom)); }
+  body.has-location .app-header { display: none; }
+  body.has-location .app-layout { display: block; }
+  body.has-location .mobile-dock { height: var(--workspace-bottom); padding: 4px max(8px,env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); }
+  body.has-location .mobile-dock button { flex-direction: row; justify-content: center; gap: 5px; min-height: 44px; padding: 4px; font-size: 11px; }
+  body.has-location .mobile-dock button > span { font-size: 16px; }
+  body.has-location #map-view { flex: 1; }
+  body.has-location #map-view button { padding-inline: 6px; font-size: 11px; flex: 1; }
+  body.has-location.panel-open #sidebar { top: max(12px,env(safe-area-inset-top)); max-height: none; }
+}
+
+#comparison-label { align-self: start; padding: 3px 7px; border-radius: 4px; color: #eee; background: #111a; font-size: 11px; }
+#comparison-toolbar .seg:has(button[hidden]):not(:has(button:not([hidden]))) { display: none; }
+body.has-location:not(.photo-mode) #horizon-tap-hint { top: 39px; }
+body.has-location #satellite-status-row { flex-wrap: nowrap; align-items: center; gap: 5px; }
+body.has-location #sat-status { flex: 1; min-width: 0; }
+body.has-location #sat-retry { flex: none; min-height: 36px; padding: 5px; font-size: 10px; }
+
+@media (min-width:901px) and (max-width:1100px) {
+  body.has-location #map-view button { padding-inline: 5px; font-size: 11px; }
+}

@@ -55,6 +55,7 @@
     setOverlay(false);
     if (wasOpen && returnFocus?.isConnected)
       returnFocus.focus({ preventScroll: true });
+    if(S.pos)window.scrollTo({top:0,behavior:'instant'});
     MP.dirty = true;
   }
   for (const b of document.querySelectorAll("[data-panel]"))
@@ -98,6 +99,30 @@
     }
   });
   mobile.addEventListener("change", () => setOverlay(false));
+  function updateComparison() {
+    const photo=document.body.classList.contains('photo-mode');
+    const showPhoto=photo && !document.body.classList.contains('compare-horizon');
+    $('comparison-photo').hidden=!photo;
+    $('comparison-horizon').hidden=!photo;
+    $('comparison-label').hidden=photo;
+    $('photo-fit').hidden=!showPhoto;
+    for(const [id,active] of [['comparison-photo',showPhoto],['comparison-horizon',!showPhoto]]) {
+      $(id).classList.toggle('on',active);$(id).setAttribute('aria-pressed',String(active));
+    }
+    MP.dirty=true;
+  }
+  $('comparison-photo').onclick=()=>{document.body.classList.remove('compare-horizon');updateComparison();};
+  $('comparison-horizon').onclick=()=>{document.body.classList.add('compare-horizon');updateComparison();};
+  $('photo-fit').onclick=()=>photoViewer.reset();
+  $('map-settings-open').onclick=()=>{
+    if(mapFullscreen)setMapFullscreen(false);
+    showPanel('settings');
+    $('map-settings').scrollIntoView({block:'start'});
+  };
+  $('map-fit').onclick=()=>{
+    if(mapView==='2d')$('mp-zoom').querySelector('[data-k="0"]').click();
+    else $('terrain-reset').click();
+  };
   // Keep the selected source visually distinct from the act of opening its form.
   function update() {
     const status = HZ.loading
@@ -137,6 +162,7 @@
     for (const b of document.querySelectorAll(".seg button"))
       b.setAttribute("aria-pressed", String(b.classList.contains("on")));
   }
-  window.HorizonUI = { showPanel, showExplore, update };
+  window.HorizonUI = { showPanel, showExplore, update, updateComparison };
+  updateComparison();
   update();
 })();

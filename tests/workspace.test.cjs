@@ -263,12 +263,14 @@ test("coordinates drive mapping, all four views, fullscreen, point selection, an
       .evaluate((el) => el.classList.contains("map-fullscreen")),
     false,
   );
+  await page.locator("#map-settings-open").click();
   await page.locator("#terrain-controls>summary").click();
   await page.locator('[data-height="custom"]').click();
   await page.locator("#custom-height").fill("50");
   await page.locator("#custom-height-row button").click();
   await page.waitForFunction(() => window.__lastRequest.eye === 50);
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.evaluate(()=>HorizonUI.showExplore());
   await noOverflow(page);
   await page.locator("#map-game").click();
   await page.waitForFunction(() => mapView === "game");
@@ -452,7 +454,9 @@ test("live horizon metrics follow aiming while selected values stay fixed and cl
   assert.equal(await page.locator("#hz-readout").innerText(), selected);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: "/tmp/horizon-live-landscape.png" });
+  await page.locator("#map-settings-open").click();
   await page.locator('#mp-zoom [data-k="4"]').click();
+  await page.locator("#panel-close").click();
   await page.locator("#mp").scrollIntoViewIfNeeded();
   const map = await page.locator("#mp").boundingBox();
   await page.mouse.move(map.x + 140, map.y + 100);
@@ -665,7 +669,9 @@ test("movement stick and swipe aiming work simultaneously without continuous tur
 test("Viewpoint selection uses the horizon fit when returning to Map", async () => {
   const page=await pageFor({width:844,height:390},true);
   await mapCoordinates(page);
+  await page.locator("#map-settings-open").click();
   await page.locator('#mp-zoom [data-k="4"]').click();
+  await page.locator("#panel-close").click();
   await page.locator('#map-perspective').click();
   await page.waitForFunction(()=>mapView==='perspective' && terrainView.photoCamera);
   const rect=await page.locator('#mp3d').boundingBox();
@@ -855,5 +861,71 @@ test('third-person reticle tracks the laser impact instead of the character head
   await page.locator('#game-target').click();
   const marked=await page.evaluate(()=>({point:terrainPoint(terrainData,HZ.pinnedTarget.point),hit:terrainView.game.laser().hit}));
   assert.ok(marked.point.every((v,i)=>Math.abs(v-marked.hit[i])<1e-8));
+  await close(page);
+});
+
+
+async function assertSplit(page,photo=false) {
+  const a=await page.locator(photo?'#mp3d':'#mp').boundingBox();
+  const b=await page.locator(photo?'#photo-viewport':'#hz').boundingBox();
+  const viewport=page.viewportSize(),landscape=viewport.width>viewport.height;
+  const bottom=viewport.width<=900?(await page.locator('.mobile-dock').boundingBox()).y:viewport.height;
+  for(const rect of [a,b]) {
+    assert.ok(rect.x>=0 && rect.y>=0 && rect.x+rect.width<=viewport.width+1 && rect.y+rect.height<=bottom+1,JSON.stringify({a,b,bottom}));
+  }
+  assert.ok(Math.abs(a.width*a.height-b.width*b.height)<Math.max(a.width,b.width)*2,JSON.stringify({a,b}));
+  if(landscape){assert.ok(Math.abs(a.y-b.y)<1);assert.ok(Math.abs(a.x+a.width+2-b.x)<1);}
+  else{assert.ok(Math.abs(a.x-b.x)<1);assert.ok(Math.abs(a.y+a.height+2-b.y)<1);}
+  await noOverflow(page);
+}
+test('loaded location uses two equal visible panes with accessible overlay controls',async()=>{
+  for(const size of [{width:320,height:568},{width:390,height:844},{width:768,height:1024},{width:844,height:390},{width:901,height:600},{width:1024,height:768},{width:1440,height:900}]) {
+    const page=await pageFor(size,true);await mapCoordinates(page);
+    await assertSplit(page);
+    for(const selector of ['[data-v="2d"]','[data-v="3d"]','#map-perspective','#map-game','#map-fullscreen','#map-fit','#map-settings-open']) {
+      assert.equal(await page.locator(selector).evaluate(el=>{
+        const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+      }),true,selector);
+    }
+    await page.waitForTimeout(150);await page.screenshot({path:`/tmp/horizon-split-location-${size.width}.png`});
+    await page.locator('#map-settings-open').click();
+    assert.equal(await page.locator('#hz-range').isVisible(),true);
+    await page.locator('#mp-zoom [data-k="4"]').click();
+    if(size.width<=900)await page.locator('#panel-close').click();
+    await page.locator('#map-fit').click();assert.equal(await page.evaluate(()=>MP.zoom),0);
+    await page.locator('#map-fullscreen').click();
+    const full=await page.locator('#mp').boundingBox();assert.ok(full.height>=size.height-1);
+    await page.locator('#map-fullscreen').click();await assertSplit(page);
+    await close(page);
+  }
+});
+
+test('photo opens beside an equal Viewpoint pane, with optional horizon and photo fit',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  const png=await page.evaluate(()=>{
+    window.exifr.gps=async()=>({latitude:48.8584,longitude:2.2945});
+    window.exifr.parse=async()=>({GPSLatitude:48.8584,GPSLongitude:2.2945,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.8584,longitude:2.2945});
+    const c=document.createElement('canvas');c.width=1200;c.height=800;
+    const ctx=c.getContext('2d');ctx.fillStyle='#b8c5ca';ctx.fillRect(0,0,1200,800);
+    ctx.fillStyle='#677776';ctx.beginPath();ctx.moveTo(0,650);ctx.lineTo(350,200);ctx.lineTo(600,490);ctx.lineTo(900,270);ctx.lineTo(1200,600);ctx.lineTo(1200,800);ctx.lineTo(0,800);ctx.fill();
+    return c.toDataURL('image/png').split(',')[1];
+  });
+  await page.locator('#photo-file').setInputFiles({name:'comparison-test.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await page.waitForFunction(()=>S.locationSource==='photo' && HZ.P && !HZ.loading && mapView==='perspective' && document.getElementById('photo-preview').naturalWidth>0);
+  for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:568}]) {
+    await page.setViewportSize(size);await assertSplit(page,true);
+    assert.equal(await page.locator('#hz').isVisible(),false);
+    await page.waitForTimeout(150);await page.screenshot({path:`/tmp/horizon-split-photo-${size.width}.png`});
+    await page.locator('#comparison-horizon').click();assert.equal(await page.locator('#hz').isVisible(),true);
+    assert.equal(await page.locator('#photo-viewport').isVisible(),false);
+    await page.locator('#comparison-photo').click();await assertSplit(page,true);
+  }
+  await page.locator('#photo-viewport').hover();await page.keyboard.down('Control');await page.mouse.wheel(0,-150);await page.keyboard.up('Control');
+  await page.waitForFunction(()=>photoViewer.scale>1);
+  await page.locator('#photo-fit').click();assert.equal(await page.evaluate(()=>photoViewer.scale),1);
+  await page.locator('[data-mobile-panel="location"]').click();await page.locator('#coordinate-pick').click();
+  await page.locator('#coordinate-input').fill('48.8584, 2.2945');await page.locator('#coordinate-submit').click();
+  await page.waitForFunction(()=>S.locationSource==='coordinates' && HZ.P && !HZ.loading);
+  await assertSplit(page);assert.equal(await page.locator('#comparison-photo').isVisible(),false);
   await close(page);
 });
