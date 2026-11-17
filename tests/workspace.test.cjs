@@ -1456,3 +1456,39 @@ test('left-handed Ray Gun retains live directional lighting',async()=>{
   assert.ok(result.vertices<100000,'keep the model suitable for mobile rendering');
   await close(page);
 });
+
+test('Walk Nav opens the current avatar location until a target is marked, then falls back after clearing',async()=>{
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.evaluate(()=>{mapApp='google';labelMapApp();window.__navUrls=[];window.open=url=>window.__navUrls.push(url);});
+  await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-maps').disabled);
+  assert.match(await page.locator('#game-maps').getAttribute('aria-label'),/avatar location in Google Maps/);
+  assert.equal(await page.locator('#game-goto-target').isDisabled(),true);
+  await page.evaluate(()=>{
+    const game=terrainView.game;game.position=terrainPoint(terrainData,{lat:48.859,lon:2.296,elev:200});
+    game.flying=true;game.tilt=-1.2;terrainView.dirty=true;
+  });
+  await page.waitForFunction(()=>document.getElementById('game-target').disabled);
+  await page.locator('#game-maps').click();
+  assert.equal(await page.evaluate(()=>window.__navUrls.at(-1)),'https://www.google.com/maps/search/?api=1&query=48.859000,2.296000');
+  await page.evaluate(()=>{terrainView.game.tilt=.6;terrainView.dirty=true;});
+  await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
+  await page.locator('#game-target').click();
+  const target=await page.evaluate(()=>({lat:HZ.pinnedTarget.point.lat.toFixed(6),lon:HZ.pinnedTarget.point.lon.toFixed(6)}));
+  assert.match(await page.locator('#game-maps').getAttribute('aria-label'),/marked target/);
+  await page.evaluate(()=>{
+    const game=terrainView.game;game.position=terrainPoint(terrainData,{lat:48.8601,lon:2.2972,elev:200});
+    game.flying=true;terrainView.dirty=true;
+  });
+  await page.locator('#game-maps').click();
+  assert.equal(await page.evaluate(()=>window.__navUrls.at(-1)),`https://www.google.com/maps/search/?api=1&query=${target.lat},${target.lon}`);
+  await page.evaluate(()=>clearSelection());
+  await page.waitForFunction(()=>document.getElementById('game-maps').title.includes('avatar location'));
+  await page.locator('#game-maps').click();
+  assert.equal(await page.evaluate(()=>window.__navUrls.at(-1)),'https://www.google.com/maps/search/?api=1&query=48.860100,2.297200');
+  await page.evaluate(()=>{mapApp='gaia';labelMapApp();});
+  await page.locator('#game-maps').click();
+  assert.equal(await page.evaluate(()=>window.__navUrls.at(-1)),'https://www.gaiagps.com/map/?loc=14/2.297200/48.860100');
+  assert.match(await page.locator('#game-maps').getAttribute('aria-label'),/avatar location in Gaia GPS/);
+  await close(page);
+});

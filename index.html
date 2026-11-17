@@ -171,7 +171,7 @@
           <button id="game-goto-target" disabled aria-label="Fly to marked target"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Target</span></button>
         </div>
         <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
-        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
+        <button id="game-maps" disabled aria-label="Open avatar location in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
         <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
         <label class="game-speed"><span>Speed</span><input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-orientation="vertical" aria-valuetext="25 times normal speed"><output id="game-speed-value" for="game-speed">25×</output></label>
       </div>
@@ -1541,9 +1541,19 @@ $('map-fullscreen').onclick = () => setMapFullscreen(!mapFullscreen);
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape' && mapView !== 'game' && mapFullscreen) setMapFullscreen(false);
 });
-function selectedGameMapPoint() {
+function gameMapPoint() {
   const target = readoutTarget();
-  return target?.selected ? target.point : null;
+  if (target?.selected) return target.point;
+  const game=terrainView?.game;
+  return game?.active ? gameTarget(game,HZ.P?.hObs ?? 0,HZ.P?.k ?? .13).point : null;
+}
+function updateGameNav() {
+  const button=$('game-maps'),target=readoutTarget();
+  button.disabled=!gameMapPoint();
+  const label=`Open ${target?.selected ? 'marked target' : 'avatar location'} in ${MAP_APPS[mapApp].name}`;
+  if(button.title!==label) {
+    button.title=label;button.setAttribute('aria-label',label);
+  }
 }
 
 const observerStates = {
@@ -1702,7 +1712,7 @@ function drawTerrainView() {
     if(mapView==='game' && terrainView.game?.active) {
       const game=terrainView.game;
       const markedTarget=readoutTarget();
-      $('game-maps').disabled=!selectedGameMapPoint();
+      updateGameNav();
       $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
       $('game-goto-target').title=!markedTarget?.selected?'Mark a target first'
         : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Fly to the marked target';
@@ -2164,7 +2174,7 @@ $("custom-height-row").onsubmit = event => {
   if ($("custom-height").checkValidity()) changePhotoObserver("custom", Number($("custom-height").value));
 };
 $('game-maps').onclick=()=>{
-  const point=selectedGameMapPoint();
+  const point=gameMapPoint();
   if(point)openMap(point.lat,point.lon);
 };
 $('game-exit').onclick=()=>setMapView(gameReturnView);
@@ -2206,7 +2216,7 @@ $('game-target').onclick=()=>{
   HZ.selAz=target.bearing;HZ.selLayer=0;HZ.pinnedTarget=target;
   game.targetPlaced=true;mpFitSelection();
   $('game-goto-target').disabled=!game.targetDestination(target.point);
-  $('game-maps').disabled=!selectedGameMapPoint();
+  updateGameNav();
   pulseTargetActions();
 };
 bindGameStick($('game-stick'),()=>terrainView?.game);
@@ -2412,8 +2422,7 @@ function labelMapApp() {
   const m = MAP_APPS[mapApp];
   $("r-maps").textContent = `Open in ${m.name}`;
   $("btn-maps").textContent = m.short;
-  $("game-maps").setAttribute("aria-label", `Open target in ${m.name}`);
-  $("game-maps").title = `Open target in ${m.name}`;
+  updateGameNav();
   for (const b of $("map-app").querySelectorAll("button"))
     b.classList.toggle("on", b.dataset.a === mapApp);
 }
