@@ -54,9 +54,10 @@ after(async () => {
   await browser?.close();
   await new Promise((r) => server?.close(r));
 });
-async function pageFor(size = { width: 1440, height: 900 }, mapped = false) {
+async function pageFor(size = { width: 1440, height: 900 }, mapped = false, colorScheme = "light") {
   const context = await browser.newContext({
     viewport: size,
+    colorScheme,
     serviceWorkers: "block",
   });
   const page = await context.newPage();
@@ -1185,4 +1186,74 @@ test('first-person GPU draw keeps hands stable during movement and restores the 
   assert.equal(result.error,0);
   await page.screenshot({path:'/tmp/horizon-stable-hands.png'});
   await close(page);
+});
+
+test('system dark mode keeps controls readable and changes live without losing the mapped location',async()=>{
+  for(const size of [{width:390,height:844},{width:1440,height:900}]) {
+    const page=await pageFor(size,true,'dark');
+    const checkContrast=async selectors=>{
+      const results=await page.evaluate(selectors=>{
+        const rgb=s=>(s.match(/[\d.]+/g)||[]).map(Number);
+        const over=(fg,bg)=>fg.slice(0,3).map((v,i)=>v*(fg[3]??1)+bg[i]*(1-(fg[3]??1)));
+        const lum=c=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
+        return selectors.map(selector=>{
+          const el=document.querySelector(selector),chain=[];
+          for(let n=el;n;n=n.parentElement)chain.unshift(n);
+          let bg=[255,255,255];
+          for(const n of chain)bg=over(rgb(getComputedStyle(n).backgroundColor),bg);
+          const fg=over(rgb(getComputedStyle(el).color),bg),a=lum(fg),b=lum(bg);
+          return {selector,ratio:(Math.max(a,b)+.05)/(Math.min(a,b)+.05)};
+        });
+      },selectors);
+      for(const r of results)assert.ok(r.ratio>=4.5,`${r.selector} has ${r.ratio.toFixed(2)} contrast`);
+    };
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark');
+    await checkContrast(['#gate h2','#gate-msg','#gate-btn','#gate-photo','#gate-coordinates']);
+    await page.screenshot({path:`/tmp/horizon-dark-welcome-${size.width}.png`});
+    await mapCoordinates(page);
+    await page.locator('#hz').click({position:{x:120,y:80}});
+    await page.waitForFunction(()=>HZ.selAz!==null);
+    const state=await page.evaluate(()=>({az:HZ.selAz,requests:window.__terrainRequests,lat:S.pos.coords.latitude}));
+    await checkContrast(['#map-view button.on','#map-fullscreen','#map-fit','#mp-wrap [data-selection-details]','#mp-attribution']);
+    await page.screenshot({path:`/tmp/horizon-dark-map-${size.width}.png`});
+    await page.locator('#map-fullscreen').click();
+    await checkContrast(['#map-view button.on','#map-fullscreen','#map-fit']);
+    await page.locator('#map-fullscreen').click();
+    for(const panel of ['location','project','settings']) {
+      await page.locator(size.width<=900?`[data-mobile-panel="${panel}"]`:`[data-panel="${panel}"]`).click();
+      await checkContrast(['.panel-tabs button.active',`#panel-${panel} .section-heading h2`]);
+      if(panel==='settings')await page.screenshot({path:`/tmp/horizon-dark-settings-${size.width}.png`});
+      if(size.width<=900)await page.locator('#panel-close').click();
+    }
+    for(const scheme of ['light','dark','light']) {
+      await page.emulateMedia({colorScheme:scheme});
+      assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),scheme);
+      await page.waitForTimeout(180);
+      await checkContrast(['#map-view button.on','#map-fullscreen','#map-fit','#mp-attribution']);
+      assert.deepEqual(await page.evaluate(()=>({az:HZ.selAz,requests:window.__terrainRequests,lat:S.pos.coords.latitude})),state);
+    }
+    await page.screenshot({path:`/tmp/horizon-light-map-${size.width}.png`});
+    await noOverflow(page);
+    await page.emulateMedia({colorScheme:'dark'});
+    const png=await page.evaluate(()=>{
+      window.exifr.gps=async()=>({latitude:48.8584,longitude:2.2945});
+      window.exifr.parse=async()=>({GPSLatitude:48.8584,GPSLongitude:2.2945,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.8584,longitude:2.2945});
+      const canvas=document.createElement('canvas');canvas.width=600;canvas.height=400;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#b8c5ca';ctx.fillRect(0,0,600,400);
+      return canvas.toDataURL('image/png').split(',')[1];
+    });
+    await page.locator('#photo-file').setInputFiles({name:'dark-photo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+    await page.waitForFunction(()=>S.locationSource==='photo' && !HZ.loading && mapView==='perspective' && document.getElementById('photo-preview').naturalWidth>0);
+    await page.waitForTimeout(180);
+    await checkContrast(['#comparison-photo','#comparison-horizon','#photo-fit','#map-view button.on']);
+    assert.equal(await page.locator('#photo-preview').evaluate(el=>getComputedStyle(el).filter),'none');
+    await page.screenshot({path:`/tmp/horizon-dark-photo-${size.width}.png`});
+    await page.locator('#map-game').click();
+    await checkContrast(['#game-exit','#game-camera','#game-speed-value','#game-respawn']);
+    await page.locator('#game-exit').click();
+    await page.goto(url+'/privacy.html');await page.emulateMedia({colorScheme:'dark'});
+    await checkContrast(['h1','p','a']);
+    assert.equal(await page.locator('meta[name="theme-color"]').evaluateAll(metas=>metas.filter(m=>matchMedia(m.media).matches).length),1);
+    await close(page);
+  }
 });
