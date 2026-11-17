@@ -102,7 +102,7 @@ class TerrainGame {
     this.flight=null;this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
   stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
-  clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.lookStick={x:0,y:0};this.resetStick?.();this.resetLookStick?.(); }
+  clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.();this.resetLook?.(); }
   reset() { return this.beginFlight({position:[...this.spawn],flying:false},'start'); }
   targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
@@ -160,10 +160,8 @@ class TerrainGame {
   }
   step(dt) {
     const radius=this.view.model.radius,keys=this.keys;
-    this.yaw-=(this.lookStick?.x || 0)*1.6*dt;
-    this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt-(this.lookStick?.y || 0)*1.3*dt));
     if(this.flight) {
-      if(this.pointers.size || Math.hypot(this.lookStick?.x || 0,this.lookStick?.y || 0)>.01)this.flight.manualLook=true;
+      if(this.pointers.size)this.flight.manualLook=true;
       this.advanceFlight(dt);return;
     }
     let right=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
@@ -199,6 +197,12 @@ class TerrainGame {
     const moved=Math.hypot(this.position[0]-oldX,this.position[2]-oldZ)*radius;
     this.speed=dt>0?moved/dt:0;
     if(moved>1e-8){this.heading=Math.atan2(-dx,-dz);this.phase+=moved*4;}
+  }
+  lookBy(dx,dy) {
+    this.yaw-=dx*.006;
+    this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt+dy*.006));
+    if(this.flight && (dx || dy))this.flight.manualLook=true;
+    this.view.dirty=true;
   }
   camera() {
     const radius=this.view.model.radius;
@@ -238,7 +242,7 @@ class TerrainGame {
     },true);
     canvas.addEventListener('pointermove',e=>{
       if(!this.active)return;consume(e);const p=this.pointers.get(e.pointerId);if(!p)return;
-      this.yaw-=(e.clientX-p.x)*.006;this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt+(e.clientY-p.y)*.006));
+      this.lookBy(e.clientX-p.x,e.clientY-p.y);
       this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     },true);
     for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,e=>{
@@ -319,13 +323,12 @@ if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameFlight
 
 
 // A single captured pointer drives movement independently of camera-look touches.
-function bindGameStick(element,getGame,kind='move') {
-  const field=kind==='look'?'lookStick':'stick',resetField=kind==='look'?'resetLookStick':'resetStick';
+function bindGameStick(element,getGame) {
   let pointer=null,activeGame=null;
   const thumb=element.querySelector('.game-stick-thumb');
   const reset=()=>{
     const id=pointer;pointer=null;
-    if(activeGame)activeGame[field]={x:0,y:0};
+    if(activeGame)activeGame.stick={x:0,y:0};
     activeGame=null;
     thumb.style.transform='translate(0px, 0px)';
     if(id!==null&&element.hasPointerCapture(id)) {
@@ -343,13 +346,13 @@ function bindGameStick(element,getGame,kind='move') {
     const length=Math.hypot(dx,dy),magnitude=Math.min(1,length/travel);
     const x=length?dx/length:0,y=length?dy/length:0;
     const strength=Math.max(0,(magnitude-.08)/.92);
-    activeGame[field]={x:x*strength,y:-y*strength};
+    activeGame.stick={x:x*strength,y:-y*strength};
     thumb.style.transform='translate('+x*magnitude*travel+'px, '+y*magnitude*travel+'px)';
   };
   element.addEventListener('pointerdown',event=>{
     if(pointer!==null || (event.pointerType==='mouse'&&event.button!==0))return;
     const game=getGame();if(!game?.active)return;
-    event.preventDefault();activeGame=game;game[resetField]=reset;
+    event.preventDefault();activeGame=game;game.resetStick=reset;
     pointer=event.pointerId;
     try{element.setPointerCapture(pointer);}catch{}
     move(event);
@@ -363,5 +366,38 @@ function bindGameStick(element,getGame,kind='move') {
   window.addEventListener('blur',reset);
   window.addEventListener('resize',reset);
   window.addEventListener('pagehide',reset);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)reset();});
+}
+
+
+// Relative drag, identical to dragging the scene: no motion while held still.
+function bindGameLook(element,getGame) {
+  let pointer=null,game=null,last=null;
+  const reset=()=>{
+    const id=pointer;pointer=null;game=null;last=null;
+    element.classList.remove('is-dragging');
+    if(id!==null && element.hasPointerCapture(id)) {
+      try{element.releasePointerCapture(id);}catch{}
+    }
+  };
+  element.addEventListener('pointerdown',event=>{
+    if(pointer!==null || (event.pointerType==='mouse' && event.button!==0))return;
+    const active=getGame();if(!active?.active)return;
+    event.preventDefault();game=active;game.resetLook=reset;
+    pointer=event.pointerId;last={x:event.clientX,y:event.clientY};
+    element.classList.add('is-dragging');
+    try{element.setPointerCapture(pointer);}catch{}
+  });
+  element.addEventListener('pointermove',event=>{
+    if(event.pointerId!==pointer)return;
+    if(!game?.active || (event.pointerType==='mouse' && event.buttons===0)){reset();return;}
+    event.preventDefault();
+    game.lookBy(event.clientX-last.x,event.clientY-last.y);
+    last={x:event.clientX,y:event.clientY};
+  });
+  const finish=event=>{if(event.pointerId===pointer){event.preventDefault();reset();}};
+  element.addEventListener('lostpointercapture',finish);
+  for(const type of ['pointerup','pointercancel'])window.addEventListener(type,finish,true);
+  for(const type of ['blur','resize','pagehide'])window.addEventListener(type,reset);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)reset();});
 }

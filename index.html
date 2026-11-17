@@ -133,7 +133,7 @@
         <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
         <label class="game-speed"><span>Speed</span><select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
       </div>
-      <div id="game-look" class="game-stick" role="group" aria-label="Look joystick. Drag to aim the laser; farther from center turns faster."><span class="game-stick-thumb"></span><span class="stick-label">Look / aim</span></div>
+      <div id="game-look" class="game-stick" role="group" aria-label="Look and aim. Swipe inside this circle to look around; holding still stops turning."><span class="stick-label">Look / aim</span></div>
     </div>
   </div>
   <div class="hz-row">
@@ -2084,7 +2084,7 @@ $('game-target').onclick=()=>{
   game.targetPlaced=true;mpFitSelection();
 };
 bindGameStick($('game-stick'),()=>terrainView?.game);
-bindGameStick($('game-look'),()=>terrainView?.game,'look');
+bindGameLook($('game-look'),()=>terrainView?.game);
 for(const button of document.querySelectorAll('[data-game-key]')) {
   const stop=event=>{event.preventDefault();terrainView?.game?.keys.delete(button.dataset.gameKey);};
   button.addEventListener('pointerdown',event=>{

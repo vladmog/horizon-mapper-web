@@ -620,7 +620,7 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
   await close(page);
 });
 
-test("movement and aiming sticks work simultaneously and release on interruption", async () => {
+test("movement stick and swipe aiming work simultaneously without continuous turning", async () => {
   const page = await pageFor({width:390,height:844},true);
   await mapCoordinates(page);await page.locator('#map-game').click();
   await page.waitForFunction(()=>terrainView?.game?.active);
@@ -634,14 +634,18 @@ test("movement and aiming sticks work simultaneously and release on interruption
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[a,b]});
   await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{...a,y:a.y-25},{...b,x:b.x+25}]});
   await page.waitForFunction(before=>Math.abs(terrainView.game.yaw-before.yaw)>.05 && Math.hypot(...terrainView.game.position.map((v,i)=>v-before.position[i]))>1e-5,before);
+  const heldYaw=await page.evaluate(()=>terrainView.game.yaw);
+  await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(()=>terrainView.game.yaw),heldYaw);
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  assert.deepEqual(await page.evaluate(()=>[terrainView.game.stick,terrainView.game.lookStick]),[{x:0,y:0},{x:0,y:0}]);
+  assert.deepEqual(await page.evaluate(()=>terrainView.game.stick),{x:0,y:0});
+  assert.equal(await page.locator('#game-look').evaluate(el=>el.classList.contains('is-dragging')),false);
   const yaw=await page.evaluate(()=>terrainView.game.yaw);
   await page.waitForTimeout(150);
   assert.equal(await page.evaluate(()=>terrainView.game.yaw),yaw);
   await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{...b,x:b.x+25}]});
   await page.evaluate(()=>window.dispatchEvent(new Event('blur')));
-  assert.deepEqual(await page.evaluate(()=>terrainView.game.lookStick),{x:0,y:0});
+  assert.equal(await page.locator('#game-look').evaluate(el=>el.classList.contains('is-dragging')),false);
   await client.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
   for(const key of ['e','q']) {
     const button=page.locator('[data-game-key="'+key+'"]'),rect=await button.boundingBox();
@@ -726,4 +730,24 @@ test("exiting Walk to Terrain fits a marked target exactly like going through Ma
     assert.equal(direct.orthographic,true);
     await close(page);
   }
+});
+
+test("look circle matches scene drag sensitivity and does not rotate on an off-center press", async () => {
+  const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
+  await page.locator('#map-game').click();await page.waitForFunction(()=>terrainView.game?.active);
+  const state=()=>page.evaluate(()=>({yaw:terrainView.game.yaw,tilt:terrainView.game.tilt}));
+  const start=await state(),rect=await page.locator('#game-look').boundingBox();
+  const x=rect.x+rect.width*.65,y=rect.y+rect.height*.5;
+  await page.mouse.move(x,y);await page.mouse.down();await page.waitForTimeout(200);
+  assert.deepEqual(await state(),start);
+  await page.mouse.move(x+20,y-10,{steps:4});
+  const pad=await state();await page.waitForTimeout(200);assert.deepEqual(await state(),pad);
+  await page.mouse.up();
+  await page.evaluate(start=>{terrainView.game.yaw=start.yaw;terrainView.game.tilt=start.tilt;},start);
+  const canvas=await page.locator('#mp3d').boundingBox();
+  const cx=canvas.x+canvas.width*.4,cy=canvas.y+canvas.height*.3;
+  await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx+20,cy-10,{steps:4});await page.mouse.up();
+  assert.deepEqual(await state(),pad);
+  assert.equal(await page.locator('#game-look .game-stick-thumb').count(),0);
+  await close(page);
 });
