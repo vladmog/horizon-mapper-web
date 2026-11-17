@@ -2034,46 +2034,40 @@ body.game-mode .selection-tools { display: none; }
 .live-metrics strong { font: 10px/1.3 var(--mono); white-space: nowrap; }
 body.game-mode .view-tap-hint { display: none; }
 
-/* Keep Walk actions to one row; secondary controls open only when needed. */
-.game-header { gap: 5px; }
-.game-top { position: relative; display: flex; flex-wrap: nowrap; align-items: flex-start; gap: 6px; width: auto; max-width: 100%; }
-#game-controls .game-top > button { min-height: 44px; padding: 8px 11px; white-space: nowrap; }
-#game-menu { position: static; border: 0; pointer-events: auto; }
-#game-menu > summary {
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid #999;
-  border-radius: 8px;
-  background: #262626e8;
-  color: #f2f2f2;
-  font-size: 12px;
-  -webkit-user-select: none;
-  user-select: none;
+/* First-person controls: both sticks and all actions stay visible. */
+.game-header { flex-direction: row; align-items: center; gap: 8px; }
+#game-controls #game-exit { flex: none; white-space: nowrap; min-height: 40px; padding: 8px 10px; font-size: 11px; }
+#game-status { padding: 4px 6px; font-size: 9px; background: #111111a6; }
+#game-reticle { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%,-50%); border: 1px solid #ffffffa0; border-radius: 50%; }
+#game-reticle::before, #game-reticle::after { content: ""; position: absolute; background: #fff; }
+#game-reticle::before { width: 26px; height: 1px; top: 8px; left: -5px; }
+#game-reticle::after { height: 26px; width: 1px; left: 8px; top: -5px; }
+#game-reticle.has-hit { border-color: #ff665c; }
+#game-laser-status { position: absolute; left: 50%; top: calc(50% - 35px); transform: translateX(-50%); padding: 3px 6px; border-radius: 4px; background: #111111a0; font: 10px var(--mono); white-space: nowrap; }
+#game-controls .game-stick { width: 104px; height: 104px; border-color: #aaa; box-shadow: inset 0 0 0 19px #ffffff0a; }
+#game-stick { left: max(12px, env(safe-area-inset-left)); bottom: max(22px, env(safe-area-inset-bottom)); }
+#game-controls .game-stick-thumb { width: 38px; height: 38px; }
+.stick-label { position: absolute; bottom: 8px; left: 0; right: 0; text-align: center; font-size: 10px; color: #eee; pointer-events: none; }
+.game-right { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: max(22px, env(safe-area-inset-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+#game-look { position: relative; inset: auto; }
+#game-controls .game-actions { position: static; display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; }
+#game-controls .game-actions button { min-width: 0; min-height: 44px; padding: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; border-color: #888; border-radius: 7px; }
+#game-controls .game-actions .laser-action { grid-column: span 2; flex-direction: row; gap: 7px; border-color: #df7770; }
+.control-icon { font: 20px/1 system-ui; }
+.control-label { font-size: 9px; white-space: nowrap; }
+.laser-action .control-icon { color: #ff776c; }
+.laser-action .control-label { font-size: 11px; }
+#game-controls .game-speed { padding: 3px; display: flex; flex-direction: column; gap: 0; justify-content: center; border-color: #888; border-radius: 7px; font-size: 9px; }
+#game-controls .game-speed select { min-height: 24px; width: 100%; padding: 0; font-size: 11px; border: 0; }
+body.game-mode #view-compass { width: 30px; height: 30px; right: 12px; top: 64px; bottom: auto; }
+body.game-mode #view-compass-arrow { inset: 2px 13px; }
+@media (orientation: landscape) {
+  .game-right { flex-direction: row-reverse; align-items: flex-end; gap: 12px; }
+  #game-controls .game-stick { width: 96px; height: 96px; }
 }
-#game-menu > summary::after { content: "⌄"; margin-left: 4px; color: inherit; font-size: 12px; }
-#game-menu[open] > summary::after { content: "⌃"; }
-.game-menu-body {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 5;
-  width: min(300px, calc(100vw - 32px));
-  max-height: calc(100dvh - 90px);
-  overflow: auto;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid #888;
-  border-radius: 10px;
-  background: #202020;
-  box-shadow: 0 6px 20px #0005;
-}
-#game-controls .game-menu-body button { min-height: 44px; padding: 8px; }
-.game-menu-body .game-speed { padding: 4px 8px; gap: 5px; }
-.game-menu-body .game-help { display: block; grid-column: 1 / -1; margin: 0; padding: 5px 0 0; background: none; font-size: 10px; }
-#game-status { padding: 4px 8px; font-size: 10px; }
-@media (max-width: 520px) {
-  .game-top { width: 100%; }
-  #game-target { flex: 1; }
+@media (max-width: 359px) {
+  #game-controls .game-stick { width: 88px; height: 88px; }
+  #game-controls .game-actions { grid-template-columns: repeat(3, 50px); }
+  .game-header { align-items: flex-start; }
+  #game-status { max-width: 190px; }
 }

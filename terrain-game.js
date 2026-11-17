@@ -55,7 +55,7 @@ function gameRaycast(view, origin, direction) {
 class TerrainGame {
   constructor(view) {
     this.view=view;this.active=false;this.keys=new Set();this.pointers=new Map();
-    this.yaw=0;this.tilt=.24;this.followDistance=20;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=10;
+    this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=10;
     this.bind();
   }
   start(position, bearing=0) {
@@ -64,11 +64,11 @@ class TerrainGame {
     if(ground===null) throw new Error('Map the current location before starting Game.');
     this.position=[point[0],ground/this.view.model.radius,point[2]];
     this.spawn=[...this.position];this.yaw=-bearing*Math.PI/180;this.heading=this.yaw;
-    this.tilt=.24;this.followDistance=20;this.phase=0;this.speed=0;this.velocityY=0;
+    this.tilt=.24;this.phase=0;this.speed=0;this.velocityY=0;
     this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
   stop() { this.active=false;this.clearInput();this.lastTime=null; }
-  clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.(); }
+  clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.lookStick={x:0,y:0};this.resetStick?.();this.resetLookStick?.(); }
   reset() { this.position=[...this.spawn];this.flying=false;this.velocityY=0;this.clearInput(); }
   targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
@@ -100,6 +100,8 @@ class TerrainGame {
   }
   step(dt) {
     const radius=this.view.model.radius,keys=this.keys;
+    this.yaw-=(this.lookStick?.x || 0)*1.6*dt;
+    this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt-(this.lookStick?.y || 0)*1.3*dt));
     let right=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
     let forward=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));
     right+=this.stick?.x || 0;forward+=this.stick?.y || 0;
@@ -135,21 +137,10 @@ class TerrainGame {
     if(moved>1e-8){this.heading=Math.atan2(-dx,-dz);this.phase+=moved*4;}
   }
   camera() {
-    const radius=this.view.model.radius,target=[...this.position];target[1]+=1.25/radius;
-    const offset=[Math.cos(this.tilt)*Math.sin(this.yaw),Math.sin(this.tilt),Math.cos(this.tilt)*Math.cos(this.yaw)];
-    let eye=target.map((v,i)=>v+offset[i]*this.followDistance/radius);
-    // Shorten the camera boom before it crosses terrain, rather than seeing
-    // through the back of a hillside. Heights are in metres above local ground.
-    for(let i=1;i<=24;i++) {
-      const p=target.map((v,j)=>v+(eye[j]-v)*i/24),floor=gameGround(this.view,p[0],p[2]);
-      if(floor!==null && p[1]*radius<floor+.25) {
-        eye=target.map((v,j)=>v+(eye[j]-v)*Math.max(0,(i-1)/24));break;
-      }
-    }
-    const forward=target.map((v,i)=>v-eye[i]),length=Math.hypot(...forward);
-    if(length<.1/radius){eye=[target[0],target[1]+1/radius,target[2]+.5/radius];forward.splice(0,3,0,-1/radius,-.5/radius);}
-    const norm=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=norm;
-    const right=[-forward[2],0,forward[0]],rn=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=rn;
+    const radius=this.view.model.radius;
+    const eye=[this.position[0],this.position[1]+1.65/radius,this.position[2]];
+    const forward=[-Math.sin(this.yaw)*Math.cos(this.tilt),-Math.sin(this.tilt),-Math.cos(this.yaw)*Math.cos(this.tilt)];
+    const right=[Math.cos(this.yaw),0,-Math.sin(this.yaw)];
     const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
     const width=this.view.canvas?.clientWidth || 0,height=this.view.canvas?.clientHeight || 0;
     // Keep a 60-degree horizontal view on portrait phones instead of cropping
@@ -160,13 +151,19 @@ class TerrainGame {
   }
   laser() {
     const camera=this.camera(),radius=this.view.model.radius;
-    const origin=this.position.map((v,i)=>v+camera.right[i]*.32/radius);
-    origin[1]+=1.4/radius;
-    // Aim above the avatar so the beam and terrain hit remain visible.
-    const direction=camera.forward.map((v,i)=>v+camera.up[i]*.22);
-    const length=Math.hypot(...direction);for(let i=0;i<3;i++)direction[i]/=length;
+    const aspect=(this.view.canvas?.clientWidth || 1)/(this.view.canvas?.clientHeight || 1);
+    const key=[...this.position,this.yaw,this.tilt,camera.focal,aspect].join('/');
+    if(this.laserCache?.key===key && this.laserCache.mesh===this.view.mesh)return this.laserCache.value;
+    const aim=gameRaycast(this.view,camera.eye,camera.forward) || camera.eye.map((v,i)=>v+camera.forward[i]*3);
+    // The emitter stays visible at the lower left and converges on the crosshair.
+    const depth=.6,side=-.22*depth*aspect/camera.focal,down=-.34*depth/camera.focal;
+    const origin=camera.eye.map((v,i)=>v+(camera.right[i]*side+camera.up[i]*down+camera.forward[i]*depth)/radius);
+    const delta=aim.map((v,i)=>v-origin[i]),length=Math.hypot(...delta);
+    const direction=delta.map(v=>v/length);
     const hit=gameRaycast(this.view,origin,direction);
-    return {origin,hit,end:hit||origin.map((v,i)=>v+direction[i]*2)};
+    const value={origin,hit,end:hit||origin.map((v,i)=>v+direction[i]*3),direction,camera};
+    this.laserCache={key,mesh:this.view.mesh,value};
+    return value;
   }
   bind() {
     const canvas=this.view.canvas;
@@ -177,7 +174,7 @@ class TerrainGame {
     },true);
     canvas.addEventListener('pointermove',e=>{
       if(!this.active)return;consume(e);const p=this.pointers.get(e.pointerId);if(!p)return;
-      this.yaw-=(e.clientX-p.x)*.006;this.tilt=Math.max(-.15,Math.min(1.2,this.tilt+(e.clientY-p.y)*.006));
+      this.yaw-=(e.clientX-p.x)*.006;this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt+(e.clientY-p.y)*.006));
       this.pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
     },true);
     for(const type of ['pointerup','pointercancel','lostpointercapture'])canvas.addEventListener(type,e=>{
@@ -185,7 +182,7 @@ class TerrainGame {
       if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
     },true);
     canvas.addEventListener('wheel',e=>{
-      if(!this.active)return;consume(e);this.followDistance=Math.max(3,Math.min(100,this.followDistance*Math.exp(e.deltaY*.001)));
+      if(this.active)consume(e);
     },{capture:true,passive:false});
     const controls=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','shift','control',' ','e','q']);
     window.addEventListener('keydown',e=>{
@@ -200,51 +197,44 @@ class TerrainGame {
   }
 }
 
-// Articulated, 1.78 metre human mesh: head, neck, torso, pelvis, arms,
-// hands, legs and shoes. Dimensions are world metres, never screen pixels.
-function gameAvatar(game, radius) {
-  const vertices=[],skin=[.78,.52,.35],shirt=[.12,.55,.9],pants=[.12,.17,.23],shoe=[.06,.07,.09];
-  const swing=game.flying?0:Math.sin(game.phase)*Math.min(1,game.speed/3)*.65;
-  const rotate=(p,angle)=>[p[0],p[1]*Math.cos(angle)-p[2]*Math.sin(angle),p[1]*Math.sin(angle)+p[2]*Math.cos(angle)];
-  const transform=(p,pivot,angle)=>{
-    if(pivot)p=rotate(p.map((v,j)=>v-pivot[j]),angle).map((v,j)=>v+pivot[j]);
-    const x=p[0]*Math.cos(game.heading)+p[2]*Math.sin(game.heading),z=-p[0]*Math.sin(game.heading)+p[2]*Math.cos(game.heading);
-    return [game.position[0]+x/radius,game.position[1]+p[1]/radius,game.position[2]+z/radius];
-  };
+// Camera-relative handheld laser tool and gloved hands, in world metres.
+function gameLaserTool(game, radius) {
+  const laser=game.laser(),forward=laser.direction,vertices=[];
+  let right=[forward[1]*laser.camera.up[2]-forward[2]*laser.camera.up[1],forward[2]*laser.camera.up[0]-forward[0]*laser.camera.up[2],forward[0]*laser.camera.up[1]-forward[1]*laser.camera.up[0]];
+  const length=Math.hypot(...right);right=right.map(v=>v/length);
+  const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
+  const transform=p=>laser.origin.map((v,i)=>v+(right[i]*p[0]+up[i]*p[1]+forward[i]*p[2])/radius);
   const triangle=(a,b,c,color)=>{
     const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...n)||1;
     for(const p of [a,b,c])vertices.push(...p,...color,...n.map(x=>x/length));
   };
-  const box=(center,size,color,pivot=null,angle=0)=>{
+  const box=(center,size,color)=>{
     const corners=[];
-    for(let i=0;i<8;i++)corners.push(transform(center.map((v,j)=>v+((i>>j&1)?1:-1)*size[j]/2),pivot,angle));
+    for(let i=0;i<8;i++)corners.push(transform(center.map((v,j)=>v+((i>>j&1)?1:-1)*size[j]/2)));
     for(const face of [[0,1,3,2],[4,6,7,5],[0,4,5,1],[2,3,7,6],[0,2,6,4],[1,5,7,3]]) {
       triangle(corners[face[0]],corners[face[2]],corners[face[1]],color);
       triangle(corners[face[0]],corners[face[3]],corners[face[2]],color);
     }
   };
-  const oval=(center,size,color,pivot=null,angle=0)=>{
-    const rings=8,sides=12;
+  const glove=(center,size)=>{
+    const rings=6,sides=10;
     const at=(r,s)=>transform([center[0]+size[0]/2*Math.sin(r*Math.PI/rings)*Math.cos(s*2*Math.PI/sides),
-      center[1]+size[1]/2*Math.cos(r*Math.PI/rings),center[2]+size[2]/2*Math.sin(r*Math.PI/rings)*Math.sin(s*2*Math.PI/sides)],pivot,angle);
-    for(let r=0;r<rings;r++)for(let s=0;s<sides;s++){
+      center[1]+size[1]/2*Math.cos(r*Math.PI/rings),center[2]+size[2]/2*Math.sin(r*Math.PI/rings)*Math.sin(s*2*Math.PI/sides)]);
+    for(let r=0;r<rings;r++)for(let s=0;s<sides;s++) {
       const a=at(r,s),b=at(r+1,s),c=at(r+1,s+1),d=at(r,s+1);
-      triangle(a,c,b,color);triangle(a,d,c,color);
+      triangle(a,c,b,[.57,.57,.55]);triangle(a,d,c,[.57,.57,.55]);
     }
   };
-  oval([0,1.27,0],[.46,.57,.27],shirt);oval([0,.95,0],[.35,.28,.25],pants);
-  oval([0,1.53,0],[.12,.15,.12],skin);oval([0,1.655,-.015],[.23,.25,.235],skin);
-  oval([0,1.75,.005],[.225,.07,.215],[.12,.08,.055]);
-  oval([0,1.66,-.135],[.045,.065,.05],skin);
-  for(const side of [-1,1]) {
-    oval([side*.045,1.705,-.115],[.018,.014,.009],[.06,.05,.04]);
-    const hip=[side*.10,.96,0],shoulder=[side*.255,1.46,0];
-    oval([side*.10,.57,0],[.165,.80,.185],pants,hip,side*swing);
-    box([side*.10,.09,-.05],[.16,.13,.29],shoe,hip,side*swing);
-    oval([side*.265,1.20,0],[.15,.56,.155],shirt,shoulder,-side*swing);
-    oval([side*.27,.90,0],[.11,.16,.095],skin,shoulder,-side*swing);
-  }
+  box([0,-.005,-.12],[.075,.075,.25],[.32,.34,.36]); // barrel
+  box([0,-.04,-.23],[.105,.12,.15],[.18,.19,.20]); // body
+  box([0,-.13,-.25],[.07,.16,.09],[.11,.12,.13]); // grip
+  box([0,.045,-.2],[.025,.025,.055],[.65,.65,.65]); // sight
+  glove([0,-.15,-.24],[.11,.12,.12]); // gripping glove
+  box([.015,-.27,-.32],[.13,.20,.19],[.21,.22,.23]); // sleeve
+  glove([-.065,-.065,-.105],[.085,.07,.13]); // supporting hand
+  box([-.1,-.13,-.17],[.10,.14,.13],[.21,.22,.23]);
+  box([0,.012,.012],[.022,.022,.018],[1,.08,.04]); // lit emitter
   return new Float32Array(vertices);
 }
 
@@ -261,16 +251,17 @@ function gameTarget(game, observerAltitude, refraction=.13, position=game.positi
   const drop=dist*dist*(1-refraction)/(2*6371008.8);
   return {bearing,point:{lat,lon,dist,elev,ang:Math.atan2(elev-observerAltitude-drop,dist)/rad,z:model.z}};
 }
-if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameAvatar,gameTarget,TerrainGame};
+if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameLaserTool,gameTarget,TerrainGame};
 
 
 // A single captured pointer drives movement independently of camera-look touches.
-function bindGameStick(element,getGame) {
+function bindGameStick(element,getGame,kind='move') {
+  const field=kind==='look'?'lookStick':'stick',resetField=kind==='look'?'resetLookStick':'resetStick';
   let pointer=null,activeGame=null;
   const thumb=element.querySelector('.game-stick-thumb');
   const reset=()=>{
     const id=pointer;pointer=null;
-    if(activeGame)activeGame.stick={x:0,y:0};
+    if(activeGame)activeGame[field]={x:0,y:0};
     activeGame=null;
     thumb.style.transform='translate(0px, 0px)';
     if(id!==null&&element.hasPointerCapture(id)) {
@@ -288,13 +279,13 @@ function bindGameStick(element,getGame) {
     const length=Math.hypot(dx,dy),magnitude=Math.min(1,length/travel);
     const x=length?dx/length:0,y=length?dy/length:0;
     const strength=Math.max(0,(magnitude-.08)/.92);
-    activeGame.stick={x:x*strength,y:-y*strength};
+    activeGame[field]={x:x*strength,y:-y*strength};
     thumb.style.transform='translate('+x*magnitude*travel+'px, '+y*magnitude*travel+'px)';
   };
   element.addEventListener('pointerdown',event=>{
     if(pointer!==null || (event.pointerType==='mouse'&&event.button!==0))return;
     const game=getGame();if(!game?.active)return;
-    event.preventDefault();activeGame=game;game.resetStick=reset;
+    event.preventDefault();activeGame=game;game[resetField]=reset;
     pointer=event.pointerId;
     try{element.setPointerCapture(pointer);}catch{}
     move(event);
@@ -306,6 +297,7 @@ function bindGameStick(element,getGame) {
   // gesture cancellation, controls moving during rotation, and DOM changes.
   for(const type of ['pointerup','pointercancel'])window.addEventListener(type,finish,true);
   window.addEventListener('blur',reset);
+  window.addEventListener('resize',reset);
   window.addEventListener('pagehide',reset);
   document.addEventListener('visibilitychange',()=>{if(document.hidden)reset();});
 }

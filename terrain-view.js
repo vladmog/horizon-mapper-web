@@ -340,7 +340,7 @@ class TerrainView {
     if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(this.program));
     this.uniforms = Object.fromEntries(['eye','right','up','forward','aspect','halfHeight','focal','clipNear','clipFar','viewport','lineWidth','imagery','detailImagery','detailBounds','detailCount','mode','color']
       .map(name => [name, gl.getUniformLocation(this.program, name === 'detailBounds' ? 'detailBounds[0]' : name)]));
-    this.vertexBuffer = gl.createBuffer(); this.indexBuffer = gl.createBuffer(); this.markerBuffer = gl.createBuffer(); this.avatarBuffer=gl.createBuffer();
+    this.vertexBuffer = gl.createBuffer(); this.indexBuffer = gl.createBuffer(); this.markerBuffer = gl.createBuffer(); this.toolBuffer=gl.createBuffer();
     const anisotropy = gl.getExtension('EXT_texture_filter_anisotropic');
     const createTexture = (target = gl.TEXTURE_2D) => {
       const texture = gl.createTexture(); gl.bindTexture(target, texture);
@@ -657,14 +657,16 @@ class TerrainView {
     gl.drawElements(gl.TRIANGLES,this.indexCount,gl.UNSIGNED_INT,0);
     window.projectAssets?.draw3D(this,{width:w,height:h,dpr});
     if(gameCamera) {
-      const avatar=gameAvatar(this.game,this.model.radius);
-      gl.bindBuffer(gl.ARRAY_BUFFER,this.avatarBuffer);gl.bufferData(gl.ARRAY_BUFFER,avatar,gl.DYNAMIC_DRAW);
+      const tool=gameLaserTool(this.game,this.model.radius);
+      gl.disable(gl.DEPTH_TEST);
+      gl.bindBuffer(gl.ARRAY_BUFFER,this.toolBuffer);gl.bufferData(gl.ARRAY_BUFFER,tool,gl.DYNAMIC_DRAW);
       gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
       gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);
       gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,3,gl.FLOAT,false,36,24);
-      gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,avatar.length/9);
+      gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,tool.length/9);
       gl.disableVertexAttribArray(2);gl.disableVertexAttribArray(3);
       const laser=this.game.laser();
+      gl.enable(gl.DEPTH_TEST);
       gl.bindBuffer(gl.ARRAY_BUFFER,this.markerBuffer);
       gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([...laser.origin,...laser.end]),gl.DYNAMIC_DRAW);
       gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);
@@ -686,9 +688,9 @@ class TerrainView {
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([...origin,...endpoint]),gl.DYNAMIC_DRAW);
     gl.vertexAttribPointer(0,3,gl.FLOAT,false,0,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
     gl.disable(gl.DEPTH_TEST);gl.uniform1i(this.uniforms.mode,1);gl.uniform3fv(this.uniforms.color,[1,1,1]);
-    if(target && !photoCamera)gl.drawArrays(gl.LINES,0,2);
+    if(target && !photoCamera && !gameCamera)gl.drawArrays(gl.LINES,0,2);
     gl.uniform1i(this.uniforms.mode,2);gl.uniform3fv(this.uniforms.color,[.22,.74,.97]);
-    if(!photoCamera)gl.drawArrays(gl.POINTS,0,1);
+    if(!photoCamera && !gameCamera)gl.drawArrays(gl.POINTS,0,1);
     if(target){gl.uniform3fv(this.uniforms.color,target.selected?[1,.44,.44]:[1,.82,.35]);gl.drawArrays(gl.POINTS,1,1);}
   }
 }

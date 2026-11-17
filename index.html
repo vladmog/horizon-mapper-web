@@ -117,22 +117,23 @@
     <button id="sat-retry" hidden>Retry imagery</button>
   </div>
   <div id="game-controls" hidden>
-    <div class="game-header">
-    <div class="game-top">
-      <button id="game-exit">Exit walk</button>
-      <button id="game-target">Mark target</button>
-      <details id="game-menu"><summary>More</summary><div class="game-menu-body">
-        <button id="game-respawn">Return to start</button>
-        <button id="game-goto-target" disabled>Go to target</button>
-        <button id="game-maps" disabled>Open in Maps</button>
-        <label class="game-speed">Speed <select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
-        <p class="game-help">Drag to look. Use the stick to move, or WASD / arrows. Shift: sprint · E / Q: up / down · Esc: exit.</p>
-      </div></details>
+    <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status" role="status"></div></div>
+    <div id="game-reticle" aria-hidden="true"><span></span></div>
+    <div id="game-laser-status" role="status">Aim the laser at terrain</div>
+    <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
+    <div class="game-right">
+      <div class="game-actions" aria-label="Laser and movement controls">
+        <button id="game-target" class="laser-action" aria-label="Mark the terrain point hit by the laser"><span class="control-icon" aria-hidden="true">⊕</span><span class="control-label">Mark laser</span></button>
+        <button id="game-goto-target" disabled aria-label="Go to marked target"><span class="control-icon" aria-hidden="true">⌖</span><span class="control-label">Go to</span></button>
+        <button id="game-maps" disabled aria-label="Open target in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Maps</span></button>
+        <button id="game-respawn" aria-label="Return to start"><span class="control-icon" aria-hidden="true">↶</span><span class="control-label">Start</span></button>
+        <label class="game-speed"><span>Speed</span><select id="game-speed" aria-label="Movement speed"><option value="1">1×</option><option value="5">5×</option><option value="10" selected>10×</option><option value="25">25×</option><option value="50">50×</option><option value="100">100×</option></select></label>
+        <button data-game-key="shift" aria-label="Hold to sprint"><span class="control-icon" aria-hidden="true">»</span><span class="control-label">Sprint</span></button>
+        <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
+        <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
+      </div>
+      <div id="game-look" class="game-stick" role="group" aria-label="Look joystick. Drag to aim the laser; farther from center turns faster."><span class="game-stick-thumb"></span><span class="stick-label">Look / aim</span></div>
     </div>
-    <div id="game-status" role="status"></div>
-    </div>
-    <div id="game-stick" class="game-stick" role="group" aria-label="Movement stick. Drag to move; farther from center moves faster. Keyboard: WASD or arrow keys."><span class="game-stick-thumb"></span></div>
-    <div class="game-actions"><button data-game-key="shift">Sprint</button><button data-game-key="e" aria-label="Fly up">Ascend</button><button data-game-key="q" aria-label="Fly down">Descend</button></div>
   </div>
   <div class="hz-row">
     <label>Map radius</label>
@@ -1573,7 +1574,6 @@ function setMapView(view) {
   updateViewCompass();
   document.body.classList.toggle('game-mode',view==='game');
   $('game-controls').hidden=view!=='game';
-  if(view!=='game') $('game-menu').open=false;
   if(view==='game') $('mp3d').focus();
   terrainView?.cancelGestures();
   $("mp").hidden = view !== "2d"; $("mp3d").hidden = view === "2d";
@@ -1621,9 +1621,12 @@ function drawTerrainView() {
       $('game-goto-target').disabled=!markedTarget?.selected || !game.targetDestination(markedTarget.point);
       $('game-goto-target').title=!markedTarget?.selected?'Mark a target first'
         : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Move to the marked target';
-      const laserHit=game.laser().hit;
+      const laser=game.laser(),laserHit=laser.hit;
       $('game-target').disabled=!laserHit;
-      $('game-target').textContent=laserHit?'Mark target':'Aim at terrain';
+      $('game-target').title=laserHit?'Save the terrain point at the laser dot':'Aim the laser at terrain first';
+      $('game-reticle').classList.toggle('has-hit',!!laserHit);
+      const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*terrainData.radius:0;
+      $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':(distance/1000).toFixed(1)+' km'}`:'No terrain hit — aim lower';
       $('game-status').textContent=`${game.flying?'Flying':'On foot'} · ${game.speed.toFixed(1)} m/s · ${Math.max(0,game.position[1]*terrainData.radius-ground).toFixed(1)} m above ground${game.targetPlaced?' · Target placed':''}`;
     }
     terrainView.render(readoutTarget(), HZ.P?.hObs ?? (HZ.P ? HZ.P.ground + HZ.P.eye : 0));
@@ -2057,8 +2060,6 @@ $('game-maps').onclick=()=>{
   const point=selectedGameMapPoint();
   if(point)openMap(point.lat,point.lon);
 };
-for (const button of $("game-menu").querySelectorAll("button"))
-  button.addEventListener("click", () => { $("game-menu").open = false; });
 $('game-exit').onclick=()=>setMapView(gameReturnView);
 $('game-speed').onchange=()=>{if(terrainView?.game)terrainView.game.speedMultiplier=Number($('game-speed').value);};
 $('game-respawn').onclick=()=>terrainView?.game?.reset();
@@ -2074,6 +2075,7 @@ $('game-target').onclick=()=>{
   game.targetPlaced=true;mpFitSelection();
 };
 bindGameStick($('game-stick'),()=>terrainView?.game);
+bindGameStick($('game-look'),()=>terrainView?.game,'look');
 for(const button of document.querySelectorAll('[data-game-key]')) {
   const stop=event=>{event.preventDefault();terrainView?.game?.keys.delete(button.dataset.gameKey);};
   button.addEventListener('pointerdown',event=>{
@@ -2275,7 +2277,8 @@ function labelMapApp() {
   const m = MAP_APPS[mapApp];
   $("r-maps").textContent = `Open in ${m.name}`;
   $("btn-maps").textContent = m.short;
-  $("game-maps").textContent = `Open in ${m.name}`;
+  $("game-maps").setAttribute("aria-label", `Open target in ${m.name}`);
+  $("game-maps").title = `Open target in ${m.name}`;
   for (const b of $("map-app").querySelectorAll("button"))
     b.classList.toggle("on", b.dataset.a === mapApp);
 }
