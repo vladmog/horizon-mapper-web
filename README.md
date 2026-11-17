@@ -33,3 +33,18 @@ The Pages workflow publishes the repository root after every push to `main`. The
 Use **Full screen** beside the map-view selector to expand 2D, 3D, or Perspective to fill the browser viewport. Switch views while expanded; **Exit full screen** or Escape restores the page. Game keeps its existing full-screen layout. Exiting Game returns to the previous map view, including its expanded state.
 
 In Game, mark a target with the laser or use an existing selected map target, then choose **Open in Apple Maps**, **Google Maps**, or **Gaia GPS**. This uses the same provider selected on the main page and the same target coordinates. The button stays disabled until a target is selected.
+
+### Map entered coordinates
+
+Choose **Enter coordinates** (also available on the startup screen), paste a
+latitude/longitude pair such as `37.7749, -122.4194`, and tap **Map coordinates**.
+Use decimal degrees, latitude first, with negative values for south or west.
+Latitude must be between -80 and 80 degrees (the terrain engine's coverage),
+and longitude between -180 and 180. A comma or whitespace separates the values.
+
+The horizon maps automatically at ground plus eye level, initially facing north.
+Drag the profile to change bearing; range changes remap automatically. The map,
+3D, Perspective, and Open in Maps use the entered location. No photo or sensor
+permission is required. Invalid input leaves the current mapped location intact.
+Use **Upload photo** or **Use device GPS** to switch back. Entered coordinates
+are a temporary viewpoint, not an asset saved in a photo/GPX project.

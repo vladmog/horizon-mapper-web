@@ -111,9 +111,9 @@ if(typeof document!=='undefined') (()=>{
   }
   async function run(fn) {
     if(state.busy)return;state.busy=true;list();
-    for(const id of ['photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=true;
+    for(const id of ['coordinate-pick','coordinate-submit','photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=true;
     try{await fn();}catch(error){say(error.message||String(error));}
-    finally{state.busy=false;list();for(const id of ['photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=false;}
+    finally{state.busy=false;list();for(const id of ['coordinate-pick','coordinate-submit','photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=false;}
   }
   async function waitMapped() {
     const deadline=Date.now()+180000;
@@ -137,7 +137,7 @@ if(typeof document!=='undefined') (()=>{
     }else {
       ++photoRequest;resetLocationOutput();
       if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
-      S.locationSource='photo';S.photoName=photo.name;S.pos={coords:{...saved.coords},timestamp:Date.now()};S.posErr=null;
+      closeCoordinateForm();S.locationSource='photo';S.photoName=photo.name;S.pos={coords:{...saved.coords},timestamp:Date.now()};S.posErr=null;
       Object.assign(HZ,clone(saved.settings));HZ.P=saved.profile;prepProfile(HZ.P);HZ.at={lat:HZ.P.lat0,lon:HZ.P.lon0};HZ.loading=false;HZ.err=false;HZ.status='';
       Object.assign(observerStates,clone(saved.observers));photoObserverHeight=saved.height;photoCustomHeight=saved.custom;
       Object.assign(terrainModeViews,clone(saved.views||{}));terrainData=saved.terrain;terrainView?.setModel(terrainData);
@@ -155,7 +155,7 @@ if(typeof document!=='undefined') (()=>{
     state.active=null;if(mapView!=='2d')setMapView('2d');resetLocationOutput();clearPhotoPreview();
     const p=track.data.segments[0]?.[0]||track.data.waypoints[0];
     ++photoRequest;if(watchId!==null)navigator.geolocation.clearWatch(watchId);watchId=null;
-    S.locationSource='track';S.photoName='';S.pos={coords:{latitude:p.lat,longitude:p.lon,altitude:p.elev},timestamp:Date.now()};
+    closeCoordinateForm();S.locationSource='track';S.photoName='';S.pos={coords:{latitude:p.lat,longitude:p.lon,altitude:p.elev},timestamp:Date.now()};
     photoObserverHeight='ground';HZ.photoBearing=0;HZ.photoInitialBearing=0;
     const points=track.data.segments.flat();let extent=2000;
     for(const q of points)extent=Math.max(extent,Math.hypot((q.lat-p.lat)*111320,(q.lon-p.lon)*111320*Math.cos(p.lat*Math.PI/180)));
@@ -318,6 +318,13 @@ if(typeof document!=='undefined') (()=>{
   }
   $('asset-add').onclick=()=>$('asset-files').click();$('asset-files').onchange=e=>{const files=[...e.target.files];e.target.value='';run(()=>addFiles(files));};
   $('photo-file').onchange=e=>{const files=[...e.target.files];e.target.value='';return run(()=>addFiles(files));};
+  const useCoordinates=$('coordinate-form').onsubmit;
+  $('coordinate-form').onsubmit=event=>{
+    if(state.busy){event.preventDefault();return false;}
+    capture();
+    if(!useCoordinates(event))return false;
+    state.active=null;dirty();list();return true;
+  };
   const useGPS=$('use-gps').onclick;$('use-gps').onclick=()=>{capture();state.active=null;useGPS();dirty();list();};
   $('project-fit').onclick=fitAll;$('project-save').onclick=()=>run(save);
   $('project-open').onclick=()=>run(async()=>{const all=await stored('getAll'),p=all.find(p=>p.id===$('project-saved').value);if(p)await open(p);else say('Choose a saved project first.');});

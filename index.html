@@ -61,6 +61,11 @@
   .btns{display:flex;gap:8px;margin-top:12px}
   .btns button{flex:1}
 
+  #card-location > .btns{flex-wrap:wrap}
+  #coordinate-form{margin-top:14px}
+  #coordinate-form label{display:block;margin-bottom:6px}
+  #coordinate-input{width:100%;min-width:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);font:16px var(--mono);user-select:text;-webkit-user-select:text}
+  #coordinate-error{margin-top:8px}
   #gate{position:fixed;inset:0;background:rgba(10,13,18,.97);z-index:50;
     display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:16px;padding:28px;text-align:center}
@@ -244,9 +249,17 @@
 
 <section class="card" id="card-location" aria-label="Location source">
   <div class="btns">
+    <button id="coordinate-pick" aria-expanded="false" aria-controls="coordinate-form">Enter coordinates</button>
     <button id="photo-pick">Upload photo</button>
     <button id="use-gps" class="on">Use device GPS</button>
   </div>
+  <form id="coordinate-form" hidden novalidate>
+    <label for="coordinate-input">Latitude, longitude</label>
+    <input id="coordinate-input" type="text" placeholder="37.7749, -122.4194" autocomplete="off" spellcheck="false" aria-describedby="coordinate-help coordinate-error">
+    <p class="sub" id="coordinate-help">Decimal degrees, latitude first. Use minus for south or west. Terrain is available from 80° S to 80° N.</p>
+    <button id="coordinate-submit" type="submit">Map coordinates</button>
+    <div class="err" id="coordinate-error" role="status" aria-live="polite"></div>
+  </form>
   <input id="photo-file" type="file" multiple accept="image/jpeg,image/heic,image/heif,image/tiff,image/png,.jpg,.jpeg,.heic,.heif,.tif,.tiff,.png" hidden>
   <div class="sub" id="location-source">Using device GPS.</div>
   <details id="source-help">
@@ -328,7 +341,7 @@
   <div class="hz-row" id="map-view-row">
     <div class="seg" id="map-view" aria-label="Map view">
       <button data-v="2d" class="on" aria-pressed="true">2D</button><button data-v="3d" aria-pressed="false">3D</button>
-      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Load a photo and its terrain to use its viewpoint">Perspective</button>
+      <button data-v="perspective" id="map-perspective" aria-pressed="false" disabled title="Map a location to use its viewpoint">Perspective</button>
       <button data-v="game" id="map-game" aria-pressed="false" disabled>Game</button>
     </div>
     <button id="map-fullscreen" type="button" aria-pressed="false">Full screen</button>
@@ -438,8 +451,9 @@
 <div id="gate">
   <h1 style="font-size:22px;flex:none">Horizon Mapper</h1>
   <p id="gate-msg">iOS requires a tap before it will hand over the
-     magnetometer, gyroscope, and GPS. You can also map a photo without enabling sensors.</p>
+     magnetometer, gyroscope, and GPS. You can also map a photo or enter coordinates without enabling sensors.</p>
   <button id="gate-btn">Enable sensors</button>
+  <button id="gate-coordinates">Enter coordinates instead</button>
   <button id="gate-photo">Use a photo instead</button>
   <div class="err" id="gate-err"></div>
 </div>
@@ -569,7 +583,7 @@ function render(ts) {
 
   // position
   const p = S.pos;
-  const photoPosition = S.locationSource === "photo";
+  const photoPosition = S.locationSource === "photo" || S.locationSource === "coordinates";
   $("pos-accuracy").hidden = photoPosition && p?.coords.accuracy == null;
   $("pos-speed").hidden = photoPosition && p?.coords.speed == null;
   $("pos-altitude-label").textContent = photoPosition
@@ -585,6 +599,7 @@ function render(ts) {
       : altitude.toFixed(0) + " m" + (c.altitudeAccuracy ? ` ±${c.altitudeAccuracy.toFixed(0)}` : "");
     $("v-spd").textContent = c.speed == null ? "--" : miles(c.speed * 3600).toFixed(1) + " mph";
     $("foot").textContent = S.locationSource === "photo" ? "Location from photo GPS metadata"
+      : S.locationSource === "coordinates" ? "Location from entered coordinates"
       : "fix " + new Date(p.timestamp).toLocaleTimeString();
   } else {
     for (const id of ["v-lat", "v-lon", "v-dms", "v-acc", "v-alt", "v-spd"]) $(id).textContent = "--";
@@ -606,13 +621,13 @@ function render(ts) {
   }
   $("custom-height-row").hidden = photoObserverHeight !== "custom";
   updateReadout();
-  $("hz-nudge").textContent = S.locationSource === "photo"
+  $("hz-nudge").textContent = S.locationSource !== "gps"
     ? HZ.photoBearing.toFixed(1) + "°"
     : (HZ.nudge >= 0 ? "+" : "\u2212") + Math.abs(HZ.nudge).toFixed(1) + "\u00b0";
   $("hz-center").textContent = `Viewing ${curCenter().toFixed(1)}°`;
   $("hz-go").disabled = !S.pos || HZ.loading;
   $("hz-go").style.opacity = (!S.pos || HZ.loading) ? .45 : 1;
-  $("hz-actions").style.display = S.locationSource === "photo" && !HZ.err ? "none" : "flex";
+  $("hz-actions").style.display = (S.locationSource === "photo" || S.locationSource === "coordinates") && !HZ.err ? "none" : "flex";
   $("hz-go").textContent = HZ.err ? "Retry mapping" : "Map the horizon";
   if (!HZ.loading && !HZ.err) {
     if (!S.pos) HZ.status = "Waiting for a GPS fix\u2026";
@@ -621,7 +636,7 @@ function render(ts) {
   }
   $("hz-status").textContent = HZ.status;
   $("hz-status").className = HZ.err ? "err" : "";
-  $("mp-meta").textContent = mapView === "perspective" ? "Photo viewpoint" : mapView === "3d" ? "3D terrain" : mapView === "game" ? "Game" : HZ.P ? "Satellite" : "";
+  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : S.locationSource === "photo" ? "Photo viewpoint" : "Coordinate viewpoint") : mapView === "3d" ? "3D terrain" : mapView === "game" ? "Game" : HZ.P ? "Satellite" : "";
   $("hz-meta").textContent = HZ.P
     ? `${mileLabel(HZ.P.radius)} \u00b7 ${HZ.P.ms.tiles + HZ.P.ms.sweep} ms`
     : "";
@@ -632,6 +647,7 @@ function render(ts) {
   pm.className = "pill " + (S.haveTilt ? "ok" : "warn");
   const pg = $("pill-gps");
   if (S.locationSource === "photo") { pg.textContent = "PHOTO GPS"; pg.className = "pill ok"; }
+  else if (S.locationSource === "coordinates") { pg.textContent = "COORDINATES"; pg.className = "pill ok"; }
   else if (S.posErr) { pg.textContent = "GPS ERR"; pg.className = "pill bad"; }
   else if (p) {
     const a = p.coords.accuracy;
@@ -1798,7 +1814,7 @@ function observerHeightLabel() {
     : HZ.P?.observerSource === "ground-clamped" ? "Ground (photo altitude below terrain)" : "Ground + eye level";
 }
 function drawTerrainView() {
-  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : "Photo viewpoint") : "3D terrain";
+  $("mp-meta").textContent = mapView === "perspective" ? (liveViewing() ? "Sensor viewpoint" : S.locationSource === "photo" ? "Photo viewpoint" : "Coordinate viewpoint") : "3D terrain";
   $("terrain-empty").hidden = !!terrainData;
   $("terrain-empty").textContent = HZ.loading ? "Loading terrain…" : HZ.P
     ? "Waiting for 3D terrain…" : "Map a location to explore its terrain in 3D.";
@@ -1903,6 +1919,64 @@ function resetLocationOutput() {
 }
 
 let photoRequest = 0;
+function closeCoordinateForm() {
+  $("coordinate-form").hidden = true;
+  $("coordinate-pick").setAttribute("aria-expanded", "false");
+  $("coordinate-pick").classList.remove("on");
+}
+function openCoordinateForm() {
+  $("gate").classList.add("hidden");
+  $("coordinate-form").hidden = false;
+  $("coordinate-pick").setAttribute("aria-expanded", "true");
+  $("coordinate-input").focus();
+}
+$("coordinate-pick").onclick = openCoordinateForm;
+$("gate-coordinates").onclick = openCoordinateForm;
+function parseCoordinates(value) {
+  const parts = value.trim().split(/(?:\s*,\s*|\s+)/);
+  const decimal = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/;
+  if (parts.length !== 2 || !parts.every(part => decimal.test(part)))
+    throw new Error("Enter latitude, longitude in decimal degrees, for example 37.7749, -122.4194.");
+  const [latitude, longitude] = parts.map(Number);
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 80)
+    throw new Error("Latitude must be between -80 and 80 degrees for terrain mapping.");
+  if (!Number.isFinite(longitude) || Math.abs(longitude) > 180)
+    throw new Error("Longitude must be between -180 and 180 degrees.");
+  return { latitude, longitude, altitude: null, accuracy: null, speed: null };
+}
+$("coordinate-form").onsubmit = event => {
+  event.preventDefault();
+  let coords;
+  try { coords = parseCoordinates($("coordinate-input").value); }
+  catch (error) {
+    $("coordinate-error").textContent = error.message;
+    $("coordinate-input").setAttribute("aria-invalid", "true");
+    $("coordinate-input").focus();
+    return false;
+  }
+  $("coordinate-error").textContent = "";
+  $("coordinate-input").removeAttribute("aria-invalid");
+  ++photoRequest;
+  resetLocationOutput();
+  clearPhotoPreview();
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = null;
+  S.locationSource = "coordinates"; S.photoName = "";
+  S.pos = { coords, timestamp: Date.now() }; S.posErr = null;
+  HZ.photoInitialBearing = 0; HZ.photoBearing = 0; HZ.vCenter = 0;
+  photoObserverHeight = "ground";
+  $("use-gps").classList.remove("on");
+  $("photo-pick").classList.remove("on");
+  $("coordinate-pick").classList.add("on");
+  $("hz-bearing-label").textContent = "View bearing";
+  $("pan-hint").textContent = "Slide the profile to look around this location. The view starts facing north.";
+  $("pan-hint").hidden = false;
+  $("location-source").textContent = `Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+  $("photo-status").textContent = "";
+  mapHorizon();
+  $("card-horizon").scrollIntoView({ block: "start" });
+  return true;
+};
 $("photo-pick").onclick = () => $("photo-file").click();
 $("gate-photo").onclick = () => {
   $("gate").classList.add("hidden");
@@ -1919,6 +1993,7 @@ $("photo-file").onchange = async e => {
     if (request !== photoRequest) return;
     appDiagnostics.record("photo.loaded", { mode: "photo" });
     resetLocationOutput();
+    closeCoordinateForm();
     S.locationSource = "photo"; S.photoName = file.name;
     HZ.photoInitialBearing = coords.photoBearing ?? 0;
     HZ.photoBearing = HZ.photoInitialBearing; HZ.vCenter = 0;
@@ -1940,6 +2015,7 @@ $("photo-file").onchange = async e => {
   }
 };
 $("use-gps").onclick = () => {
+  closeCoordinateForm();
   ++photoRequest;
   $("photo-status").textContent = "";
   if (S.locationSource === "gps") { enableSensors("photo-status"); return; }
@@ -2144,7 +2220,7 @@ function segPick(id, attr, fn) {
 function changeRange(value) {
   if (HZ.radius === +value) return;
   HZ.radius = +value;
-  if (S.locationSource === "photo" && S.pos) {
+  if ((S.locationSource === "photo" || S.locationSource === "coordinates") && S.pos) {
     // Cancel an in-flight sweep so rapid changes always use the latest range.
     resetLocationOutput();
     mapHorizon();
