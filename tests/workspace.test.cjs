@@ -1546,3 +1546,74 @@ test('marked laser targets render a sky beam anchored through movement and fligh
   await page.evaluate(()=>clearSelection());assert.equal((await capture()).calls.length,0);
   await close(page);
 });
+
+test('Walk search is explicit, snapshots the aimed point, caches repeats, and fits phone controls',async()=>{
+  const page=await pageFor({width:390,height:844},true);let requests=0,release;
+  await page.route('https://photon.komoot.io/**',async route=>{
+    requests++;await new Promise(resolve=>release=resolve);
+    const q=new URL(route.request().url()).searchParams;
+    await route.fulfill({json:{features:[{type:'Feature',geometry:{type:'Point',coordinates:[Number(q.get('lon')),Number(q.get('lat'))]},properties:{osm_type:'N',osm_id:123,type:'house',osm_key:'amenity',osm_value:'cafe',name:'Test Coffee',housenumber:'12',street:'Main Street'}}]}});
+  });
+  await mapCoordinates(page);await page.locator('#map-game').click();
+  await page.waitForFunction(()=>!document.getElementById('game-search').disabled);
+  await page.locator('#game-target').click();assert.equal(requests,0,'marking a target does not search');
+  const pin=await page.evaluate(()=>JSON.stringify(HZ.pinnedTarget));
+  await page.locator('#game-search').click();await page.waitForFunction(()=>document.getElementById('game-search-content').textContent.includes('Searching'));
+  while(!release)await page.waitForTimeout(10);
+  assert.equal(await page.locator('#game-search').isDisabled(),true);
+  const aimed=await page.locator('#game-search-content p').textContent();
+  await page.evaluate(()=>{terrainView.game.yaw+=.5;terrainView.game.position[0]+=.0001;});
+  release();await page.waitForFunction(()=>document.getElementById('game-search-content').textContent.includes('Test Coffee'));
+  assert.ok((await page.locator('#game-search-content').textContent()).includes(aimed),'result stays tied to the searched point');
+  assert.equal(await page.evaluate(()=>JSON.stringify(HZ.pinnedTarget)),pin,'search does not move marker');
+  assert.match(await page.locator('#game-search-google').getAttribute('href'),/^https:\/\/www.google.com\/search\?q=Test/);
+  for(const [width,height] of [[390,844],[320,568],[568,320],[844,390]]) {
+    await page.setViewportSize({width,height});await page.waitForTimeout(100);
+    const result=await page.evaluate(()=>{
+      const rect=id=>{const r=document.getElementById(id).getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom};};
+      const ids=['game-search','game-target','game-goto-target','game-maps','game-look','game-stick','game-camera','game-exit'];
+      const boxes=ids.map(id=>({id,...rect(id)}));
+      return {card:rect('game-search-card'),boxes,overlaps:boxes.flatMap((a,i)=>boxes.slice(i+1).filter(b=>Math.min(a.right,b.right)-Math.max(a.x,b.x)>1 && Math.min(a.bottom,b.bottom)-Math.max(a.y,b.y)>1).map(b=>[a.id,b.id]))};
+    });
+    assert.deepEqual(result.overlaps,[]);assert.ok(result.card.x>=0 && result.card.right<=width && result.card.bottom<=height);
+    for(const b of result.boxes)assert.ok(b.x>=0 && b.right<=width && b.y>=0 && b.bottom<=height,JSON.stringify(b));
+    await page.screenshot({path:`/tmp/horizon-search-${width}.png`});
+  }
+  assert.equal(requests,1,'movement, rendering and resizing do not search');
+  await page.locator('#game-search-close').click();assert.equal(await page.locator('#game-search-card').isVisible(),false);
+  // Aim back at the original point, including the original camera position.
+  await page.evaluate(()=>{terrainView.game.yaw-=.5;terrainView.game.position[0]-=.0001;});
+  await page.locator('#game-search').click();
+  await page.waitForFunction(()=>document.getElementById('game-search-content').textContent.includes('Test Coffee'));
+  assert.equal(requests,1,'repeat point uses cached response');
+  await page.locator('#game-exit').click();assert.equal(await page.locator('#game-search-card').isVisible(),false);
+  await close(page);
+});
+
+test('Walk search handles empty results, network failures, sky aiming and late responses after close',async()=>{
+  const page=await pageFor({width:390,height:844},true);let mode='empty',release,requests=0;
+  await page.route('https://photon.komoot.io/**',async route=>{
+    requests++;
+    if(mode==='late')await new Promise(resolve=>release=resolve);
+    if(mode==='failure')return route.abort('internetdisconnected');
+    await route.fulfill({json:{features:[]}}).catch(()=>{});
+  });
+  await mapCoordinates(page);await page.locator('#map-game').click();
+  await page.waitForFunction(()=>!document.getElementById('game-search').disabled);
+  await page.locator('#game-search').click();
+  await page.waitForFunction(()=>!gameSearchRequest);
+  assert.match(await page.locator('#game-search-content').textContent(),/^[-\d.]+, [-\d.]+$/,'no match shows only coordinates');
+  await page.locator('#game-search-close').click();
+  await page.evaluate(()=>{terrainView.game.tilt=-1;});
+  await page.waitForFunction(()=>document.getElementById('game-search').disabled);assert.equal(requests,1,'sky cannot be searched');
+  await page.evaluate(()=>{terrainView.game.tilt=.6;});await page.waitForTimeout(2100);
+  mode='failure';await page.locator('#game-search').click();await page.waitForFunction(()=>!gameSearchRequest);
+  assert.match(await page.locator('#game-search-content').textContent(),/connection/);
+  assert.match(await page.locator('#game-search-google').getAttribute('href'),/google.com\/search/);
+  await page.locator('#game-search-close').click();await page.waitForTimeout(2100);
+  mode='late';await page.locator('#game-search').click();while(!release)await page.waitForTimeout(10);
+  await page.locator('#game-search-close').click();release();await page.waitForTimeout(100);
+  assert.equal(await page.locator('#game-search-card').isVisible(),false,'stale response cannot reopen card');
+  assert.equal(await page.locator('#game-search').isDisabled(),false);
+  await close(page);
+});

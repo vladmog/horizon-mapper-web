@@ -32,7 +32,7 @@ The Pages workflow publishes the repository root after every push to `main`. The
 
 Use **Full screen** beside the map-view selector to expand 2D, 3D, or Perspective to fill the browser viewport. Switch views while expanded; **Exit full screen** or Escape restores the page. Game keeps its existing full-screen layout. Exiting Game returns to the previous map view, including its expanded state.
 
-In Game, mark a target with the laser or use an existing selected map target, then choose **Open in Apple Maps**, **Google Maps**, or **Gaia GPS**. This uses the same provider selected on the main page and the same target coordinates. The button stays disabled until a target is selected.
+In Game, mark a target with the laser or use an existing selected map target, then choose **Open in Apple Maps**, **Google Maps**, or **Gaia GPS**. This uses the same provider selected on the main page and the same target coordinates. When no target is selected, Nav opens the avatar’s current location.
 
 ### Map entered coordinates
 
@@ -56,3 +56,25 @@ The `redesign/terrain-workspace` branch reorganizes the app into a map and horiz
 All existing map modes and project operations remain available. Selecting device GPS now maps its first fix automatically; coordinates and photos still map immediately. GPS permissions are requested only after an explicit location action.
 
 See `docs/ui-redesign.md` for the acceptance criteria, browser checks, and device-testing limits. Run `npm ci` and `npm test` for the UI suite (install Playwright Chromium first on Linux).
+
+## Walk laser search
+
+Tap **Search** beside **Mark laser** to identify the laser’s current terrain hit.
+This is independent of marker placement and never searches while moving or aiming.
+The compact card keeps the searched point fixed until the next search or dismissal.
+It shows an OpenStreetMap name/category or address when available, otherwise only
+coordinates, with a Google search link. A nearby match is labeled with its distance;
+it is not a claim that the laser identified a particular shop or building wall.
+The terrain model has no building geometry. Mountain matches are limited to nearby
+summits with compatible elevations; unknown slopes can remain unnamed.
+
+The client sends one bounded query to https://photon.komoot.io/reverse
+per explicit search, with a two-second minimum interval, one request in flight,
+a 15-second timeout, cancellation on close/exit, and a 64-entry, ten-minute memory
+cache. No key or backend is required. Service availability and OSM coverage vary.
+Provider terms: https://photon.komoot.io/ . No public Nominatim service is used.
+
+Validation: `tests/place-search.test.cjs` covers ranking, address fallback, and response normalization;
+`tests/workspace.test.cjs` covers explicit-only requests, captured coordinates,
+caching, failures, dismissal races, and mobile layout. Those tests use controlled
+API responses; live service checks are separate.

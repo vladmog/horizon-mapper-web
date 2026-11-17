@@ -2151,3 +2151,17 @@ body.has-location #sat-retry { flex: none; min-height: 36px; padding: 5px; font-
 @media (min-width:901px) and (max-width:1100px) {
   body.has-location #map-view button { padding-inline: 5px; font-size: 11px; }
 }
+
+/* Explicit laser lookup, separate from marking and movement. */
+#game-controls .game-actions #game-search { left: 30px; top: 4px; }
+#game-search-card { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(76px, calc(env(safe-area-inset-top) + 60px)); width: min(300px, calc(100% - 24px)); max-height: min(240px, calc(100dvh - 344px)); overflow: auto; pointer-events: auto; touch-action: pan-y; padding: 12px; border: 1px solid #888; border-radius: 12px; background: #202020f2; color: #f4f4f4; box-shadow: 0 4px 16px #0004; }
+#game-search-card[hidden] { display: none; }
+#game-controls #game-search-close { float: right; width: 32px; min-height: 32px; margin: -6px -6px 0 4px; padding: 0; font-size: 22px; }
+.search-eyebrow { font: 9px var(--mono); color: #bbb; }
+#game-search-content strong { display: block; margin-top: 6px; font-size: 16px; line-height: 1.2; overflow-wrap: anywhere; }
+#game-search-content p { margin: 6px 0; font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
+#game-search-content small { display: block; font: 9px var(--mono); margin-top: 8px; }
+#game-search-card a { color: #eee; text-decoration: underline; font-size: 10px; touch-action: manipulation; }
+.search-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.search-links a { padding: 5px 0; }
+@media (orientation: landscape) { #game-search-card { width: min(290px, calc(50% - 54px)); max-height: calc(100dvh - 208px); } }

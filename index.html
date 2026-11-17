@@ -160,11 +160,18 @@
   <div id="game-controls" hidden>
     <div class="game-header"><button id="game-exit">← Exit walk</button><div id="game-status"><span>From start</span><span id="game-start-distance"></span><span id="game-start-height"></span></div></div>
     <button id="game-camera" type="button" aria-label="Use third-person view" aria-pressed="false">3rd person</button>
+    <section id="game-search-card" hidden aria-label="Laser search result">
+      <button id="game-search-close" aria-label="Close search result">×</button>
+      <span class="search-eyebrow">Laser search</span>
+      <div id="game-search-content" role="status" aria-live="polite"></div>
+      <div class="search-links"><a id="game-search-google" target="_blank" rel="noopener noreferrer">Google ↗</a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap</a></div>
+    </section>
     <div id="game-reticle" aria-hidden="true"><span></span></div>
     <div id="game-laser-status" role="status">Aim the laser at terrain</div>
     <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
     <div class="game-right">
       <div class="game-actions" aria-label="Laser and movement controls">
+        <button id="game-search" disabled aria-label="Search the location hit by the laser"><span class="control-icon" aria-hidden="true">⌕</span><span class="control-label">Search</span></button>
         <button id="game-target" class="laser-action" aria-label="Mark the terrain point hit by the laser"><span class="control-icon" aria-hidden="true">⊕</span><span class="control-label">Mark laser</span></button>
         <div class="game-travel" role="group" aria-label="Fly to destination"><span class="travel-label">Fly to</span>
           <button id="game-respawn" aria-label="Fly to start"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Start</span></button>
@@ -254,6 +261,7 @@
 <script src="./terrain-view.js"></script>
 <script src="./photo-viewer.js"></script>
 <script src="./named-peaks.js"></script>
+<script src="./place-search.js"></script>
 <script src="./browser-profile.js"></script>
 <script>
 "use strict";
@@ -1660,6 +1668,7 @@ function setMapView(view) {
   updateViewCompass();
   document.body.classList.toggle('game-mode',view==='game');
   $('game-controls').hidden=view!=='game';
+  if(view!=='game')closeGameSearch();
   if(view==='game') $('mp3d').focus();
   terrainView?.cancelGestures();
   $("mp").hidden = view !== "2d"; $("mp3d").hidden = view === "2d";
@@ -1718,6 +1727,8 @@ function drawTerrainView() {
         : $('game-goto-target').disabled?'Target is outside the mapped terrain':'Fly to the marked target';
       const laser=game.laser(),laserHit=laser.hit;
       $('game-target').disabled=!laserHit;
+      $('game-search').disabled=!laserHit || !!gameSearchRequest;
+      $('game-search').title=laserHit?'Identify the location at the laser dot':'Aim the laser at terrain first';
       $('game-target').title=laserHit?'Save the terrain point at the laser dot':'Aim the laser at terrain first';
       $('game-reticle').classList.toggle('has-hit',!!laserHit);
       const aimScreen=game.aimScreenPoint();
@@ -2172,6 +2183,53 @@ segPick("photo-observer", "height", height => changePhotoObserver(height));
 $("custom-height-row").onsubmit = event => {
   event.preventDefault();
   if ($("custom-height").checkValidity()) changePhotoObserver("custom", Number($("custom-height").value));
+};
+let gameSearchRequest=null;
+function closeGameSearch() {
+  gameSearchRequest?.abort();gameSearchRequest=null;
+  $('game-search-card').hidden=true;
+}
+$('game-search-close').onclick=()=>{closeGameSearch();$('mp3d').focus();};
+$('game-search').onclick=async()=>{
+  const game=terrainView?.game,hit=game?.active && game.laser().hit;
+  if(!hit || gameSearchRequest || !HZ.P)return;
+  const point={...gameTarget(game,HZ.P.hObs,HZ.P.k ?? .13,hit).point};
+  const request=new AbortController();gameSearchRequest=request;
+  game.clearInput();
+  const content=$('game-search-content'),link=$('game-search-google');
+  const line=(tag,text)=>{const el=document.createElement(tag);el.textContent=text;content.append(el);return el;};
+  content.replaceChildren();line('strong','Searching…');
+  line('p',`${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`);
+  link.href=PlaceSearch.google(point);$('game-search-card').hidden=false;
+  $('game-search').disabled=true;
+  let timedOut=false;
+  const timer=setTimeout(()=>{timedOut=true;request.abort();},15000);
+  try {
+    const results=await PlaceSearch.lookup(point,{signal:request.signal});
+    if(gameSearchRequest!==request || !game.active)return;
+    content.replaceChildren();
+    const result=results[0];
+    if(result) {
+      line('strong',result.name);
+      line('p',`${result.type} · Nearby match · ${Math.round(result.distance)} m from laser point`);
+      if(result.address && result.address!==result.name)line('p',result.address);
+      const source=line('a','View map record ↗');source.href=result.source;source.target='_blank';source.rel='noopener noreferrer';
+      if(results.length>1) {
+        const other=line('p','Also nearby: '+results.slice(1).map(r=>r.name).join(' · '));other.className='search-alternatives';
+      }
+      link.href=PlaceSearch.google(point,result);
+    } else {
+      line('strong',`${point.lat.toFixed(5)}, ${point.lon.toFixed(5)}`);
+    }
+    if(result)line('small',`${point.lat.toFixed(5)}, ${point.lon.toFixed(5)} · Searched point`);
+  } catch(error) {
+    if(gameSearchRequest!==request || !game.active)return;
+    content.replaceChildren();line('strong',timedOut?'Search timed out':'Couldn’t search this point');
+    line('p',timedOut?'Try again, or open Google.':error.message==='Failed to fetch'?'Check your connection, or open Google.':error.message);
+  } finally {
+    clearTimeout(timer);
+    if(gameSearchRequest===request)gameSearchRequest=null;
+  }
 };
 $('game-maps').onclick=()=>{
   const point=gameMapPoint();
