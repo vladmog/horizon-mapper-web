@@ -1089,6 +1089,13 @@ body.map-fullscreen,
 body.game-mode {
   overflow: hidden;
 }
+/* Holding game controls must never select labels or open iOS callouts. */
+body.game-mode,
+body.game-mode * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 body.map-fullscreen #card-map,
 body.game-mode #card-map {
   position: fixed;

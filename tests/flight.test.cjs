@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {gameGround,gameFlightPlan,gameAvatar,gameLaserFrame,TerrainGame}=require('../terrain-game.js');
+const {gameGround,gameFlightPlan,gameAvatar,gameLaserFrame,gameLaserTool,TerrainGame}=require('../terrain-game.js');
 function terrain(height,patch=false) {
   const n=65,radius=1000,levels=patch?[1,.5]:[1];
   const vertices=new Float32Array(n*n*5*levels.length);
@@ -131,4 +131,36 @@ test('third-person shoulder camera shortens its boom against a hillside',()=>{
     const p=eye.map((v,j)=>v+(camera.eye[j]-v)*i/100);
     assert.ok(p[1]*1000>=gameGround(view,p[0],p[2])+.25);
   }
+});
+
+
+test('first-person hands keep their shape while moving far from the map origin',()=>{
+  const view=terrain(()=>0);view.model.radius=100000;
+  view.canvas={clientWidth:390,clientHeight:844};
+  const game=walker(view,0);game.keys.clear();game.yaw=.3;game.tilt=-.2;
+  // Aim into the sky so the intended pose is constant. Compare every vertex
+  // after float32 GPU conversion, over movement at an 80 km map offset.
+  const snapshots=[],worldSnapshots=[];
+  for(let step=0;step<60;step++) {
+    game.position=[.8+step*.0000125,.02,.7+step*.000007];
+    const camera=game.camera();
+    snapshots.push(gameLaserTool(game,view.model.radius,camera.eye));
+    const world=gameLaserTool(game,view.model.radius);
+    for(let i=0;i<world.length;i+=9)for(let axis=0;axis<3;axis++)
+      world[i+axis]=Math.fround(world[i+axis]-Math.fround(camera.eye[axis]));
+    worldSnapshots.push(world);
+  }
+  let oldDrift=0;
+  for(const mesh of worldSnapshots)for(let i=0;i<mesh.length;i+=9)for(let axis=0;axis<3;axis++)
+    oldDrift=Math.max(oldDrift,Math.abs(mesh[i+axis]-worldSnapshots[0][i+axis])*view.model.radius);
+  assert.ok(oldDrift>.001,`fixture must reproduce world-space jitter: ${oldDrift}`);
+  let maxDrift=0;
+  for(const mesh of snapshots)for(let i=0;i<mesh.length;i+=9)for(let axis=0;axis<3;axis++)
+    maxDrift=Math.max(maxDrift,Math.abs(mesh[i+axis]-snapshots[0][i+axis])*view.model.radius);
+  assert.ok(maxDrift<.00001,`foreground mesh drifted ${maxDrift} metres`);
+  // The world-space third-person tool still meets the same hand grips.
+  game.thirdPerson=true;
+  const world=gameLaserTool(game,view.model.radius),local=gameLaserTool(game,view.model.radius,game.camera().eye);
+  assert.equal(world.length,local.length);
+  assert.ok(world.every(Number.isFinite) && local.every(Number.isFinite));
 });

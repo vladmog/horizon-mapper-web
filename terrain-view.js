@@ -657,7 +657,8 @@ class TerrainView {
     gl.drawElements(gl.TRIANGLES,this.indexCount,gl.UNSIGNED_INT,0);
     window.projectAssets?.draw3D(this,{width:w,height:h,dpr});
     if(gameCamera) {
-      const handheld=gameLaserTool(this.game,this.model.radius);
+      const firstPerson=!this.game.thirdPerson;
+      const handheld=gameLaserTool(this.game,this.model.radius,firstPerson ? camera.eye : [0,0,0]);
       let tool=handheld;
       if(this.game.thirdPerson) {
         const avatar=gameAvatar(this.game,this.model.radius);
@@ -668,7 +669,11 @@ class TerrainView {
       gl.vertexAttribPointer(0,3,gl.FLOAT,false,36,0);gl.disableVertexAttribArray(1);gl.vertexAttrib2f(1,0,0);
       gl.enableVertexAttribArray(2);gl.vertexAttribPointer(2,3,gl.FLOAT,false,36,12);
       gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,3,gl.FLOAT,false,36,24);
+      // Foreground vertices are already relative to the eye; terrain, the
+      // third-person avatar and laser annotations retain world coordinates.
+      if(firstPerson)gl.uniform3fv(this.uniforms.eye,[0,0,0]);
       gl.uniform1i(this.uniforms.mode,3);gl.drawArrays(gl.TRIANGLES,0,tool.length/9);
+      if(firstPerson)gl.uniform3fv(this.uniforms.eye,camera.eye);
       gl.disableVertexAttribArray(2);gl.disableVertexAttribArray(3);
       const laser=this.game.laser();
       gl.enable(gl.DEPTH_TEST);

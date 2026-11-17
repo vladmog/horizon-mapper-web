@@ -99,6 +99,7 @@ class TerrainGame {
     this.position=[point[0],ground/this.view.model.radius,point[2]];
     this.spawn=[...this.position];this.yaw=-bearing*Math.PI/180;this.heading=this.yaw;
     this.tilt=.24;this.phase=0;this.speed=0;this.velocityY=0;
+    window.getSelection?.()?.removeAllRanges();
     this.flight=null;this.flying=false;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
   stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
@@ -289,6 +290,9 @@ class TerrainGame {
     canvas.addEventListener('wheel',e=>{
       if(this.active)consume(e);
     },{capture:true,passive:false});
+    for(const type of ['selectstart','contextmenu'])document.addEventListener(type,e=>{
+      if(this.active)e.preventDefault();
+    },true);
     const controls=new Set(['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright','control',' ','e','q']);
     window.addEventListener('keydown',e=>{
       if(!this.active || /INPUT|TEXTAREA|SELECT|SUMMARY|BUTTON/.test(e.target.tagName))return;
@@ -304,16 +308,19 @@ class TerrainGame {
 
 // Shared world-space tool frame: the beam starts at the barrel and both
 // avatar hands connect to the same grip/support points used by the tool mesh.
-function gameLaserFrame(game, radius) {
+function gameLaserFrame(game, radius, relativeTo=[0,0,0]) {
   const laser=game.laser(),forward=laser.direction;
   let right=[forward[1]*laser.camera.up[2]-forward[2]*laser.camera.up[1],forward[2]*laser.camera.up[0]-forward[0]*laser.camera.up[2],forward[0]*laser.camera.up[1]-forward[1]*laser.camera.up[0]];
   const length=Math.hypot(...right);right=right.map(v=>v/length);
   const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
-  const transform=p=>laser.origin.map((v,i)=>v+(right[i]*p[0]+up[i]*p[1]+forward[i]*p[2])/radius);
+  // Subtract in double precision before packing the tiny foreground mesh into
+  // float32. World coordinates can otherwise deform the hands as we move.
+  const origin=laser.origin.map((v,i)=>v-relativeTo[i]);
+  const transform=p=>origin.map((v,i)=>v+(right[i]*p[0]+up[i]*p[1]+forward[i]*p[2])/radius);
   return {transform,grip:transform([0,-.15,-.24]),support:transform([-.065,-.065,-.105])};
 }
-function gameLaserTool(game, radius) {
-  const {transform}=gameLaserFrame(game,radius),vertices=[];
+function gameLaserTool(game, radius, relativeTo=[0,0,0]) {
+  const {transform}=gameLaserFrame(game,radius,relativeTo),vertices=[];
   const triangle=(a,b,c,color)=>{
     const u=b.map((v,i)=>v-a[i]),v=c.map((v,i)=>v-a[i]);
     const n=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...n)||1;

@@ -1106,3 +1106,83 @@ test('mobile Details stays below the mode bar and accepts touch with phone safe 
   assert.ok(details.y>=largeBar.y+largeBar.height+6,'Details follows a taller toolbar too');
   await close(page);
 });
+
+test('Walk blocks text selection and callouts, then restores selectable app coordinates',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await mapCoordinates(page);
+  await page.locator('#hz').click({position:{x:120,y:80}});
+  await page.waitForFunction(()=>HZ.selAz!==null);
+  const selectCoordinates=async()=>{
+    await page.locator('#r-ll').scrollIntoViewIfNeeded();
+    await page.locator('#r-ll').click({clickCount:3});
+    assert.match(await page.evaluate(()=>getSelection().toString()),/\d+\.\d+/);
+    assert.equal(await page.locator('#r-ll').evaluate(el=>el.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}))),true);
+  };
+  await selectCoordinates();
+  await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView?.game?.active);
+  assert.equal(await page.evaluate(()=>getSelection().toString()),'');
+  for(const selector of ['#game-status span','#game-laser-status','.game-speed span','#game-speed-value','#game-look','#game-stick','#game-target']) {
+    const el=page.locator(selector).first();
+    assert.equal(await el.evaluate(el=>getComputedStyle(el).userSelect),'none',selector);
+    for(const type of ['selectstart','contextmenu'])
+      assert.equal(await el.evaluate((el,type)=>el.dispatchEvent(new Event(type,{bubbles:true,cancelable:true})),type),false,selector+' '+type);
+  }
+  assert.equal(await page.evaluate(()=>[document.body,...document.querySelectorAll('body *')]
+    .every(el=>getComputedStyle(el).userSelect==='none')),true);
+  await page.keyboard.press(process.platform==='darwin'?'Meta+a':'Control+a');
+  assert.equal(await page.evaluate(()=>getSelection().toString()),'');
+  assert.equal(await page.locator('body').evaluate(el=>el.dispatchEvent(new Event('selectstart',{bubbles:true,cancelable:true}))),false);
+  const client=await page.context().newCDPSession(page);
+  await client.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:5});
+  const r=await page.locator('#game-look').boundingBox();
+  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2,id:1}]});
+  await page.waitForTimeout(800);
+  await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  assert.equal(await page.evaluate(()=>getSelection().toString()),'');
+  await page.locator('#game-exit').click();
+  await selectCoordinates();
+  assert.equal(await page.locator('#r-ll').evaluate(el=>el.dispatchEvent(new Event('contextmenu',{bubbles:true,cancelable:true}))),true);
+  await close(page);
+});
+
+test('first-person GPU draw keeps hands stable during movement and restores the terrain camera',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await mapCoordinates(page);await page.locator('#map-game').click();
+  await page.waitForFunction(()=>terrainView?.game?.active);
+  const result=await page.evaluate(()=>{
+    const view=terrainView,game=view.game,gl=view.gl,draw=gl.drawArrays.bind(gl),samples=[];
+    gl.drawArrays=(mode,first,count)=>{
+      if(mode===gl.TRIANGLES && gl.getUniform(view.program,view.uniforms.mode)===3) {
+        const data=new Float32Array(count*9);gl.getBufferSubData(gl.ARRAY_BUFFER,0,data);
+        const eye=gl.getUniform(view.program,view.uniforms.eye),camera=game.camera();
+        const points=[];
+        for(let i=0;i<data.length;i+=9) {
+          const p=eye.map((v,j)=>Math.fround(data[i+j]-v));
+          const dot=axis=>p.reduce((sum,v,j)=>sum+v*axis[j],0),z=dot(camera.forward);
+          points.push(dot(camera.right)*camera.focal/z*view.canvas.clientHeight/2,
+            dot(camera.up)*camera.focal/z*view.canvas.clientHeight/2);
+        }
+        samples.push({points,eye:[...eye]});
+      }
+      return draw(mode,first,count);
+    };
+    game.yaw=.3;game.tilt=-.2;
+    for(let i=0;i<30;i++) {
+      game.position=[.8+i*.0000125,.1,.7+i*.000007];
+      view.dirty=true;view.render(null,HZ.P.hObs);
+    }
+    gl.drawArrays=draw;
+    let drift=0;
+    for(const sample of samples)sample.points.forEach((v,i)=>drift=Math.max(drift,Math.abs(v-samples[0].points[i])));
+    return {drift,count:samples.length,eyes:samples.map(s=>s.eye),
+      restored:[...gl.getUniform(view.program,view.uniforms.eye)],expected:game.camera().eye.map(Math.fround),error:gl.getError()};
+  });
+  assert.equal(result.count,30);
+  assert.ok(result.drift<.01,`hand vertices moved ${result.drift}px`);
+  assert.ok(result.eyes.every(eye=>eye.every(v=>v===0)));
+  assert.deepEqual(result.restored,result.expected);
+  assert.equal(result.error,0);
+  await page.screenshot({path:'/tmp/horizon-stable-hands.png'});
+  await close(page);
+});
