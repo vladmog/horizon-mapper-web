@@ -232,9 +232,9 @@ class TerrainGame {
   camera() {
     if(!this.thirdPerson)return this.aimCamera();
     const camera=this.aimCamera(),radius=this.view.model.radius,target=camera.eye;
-    // A close shoulder camera, measured in world metres. The person stays at
+    // A shoulder camera at the original follow distance, measured in world metres. The person stays at
     // human scale; only the camera moves. Look along the aim instead of at his head.
-    let eye=target.map((v,i)=>v+(-camera.forward[i]*4.5+camera.right[i]*.8+camera.up[i]*.2)/radius);
+    let eye=target.map((v,i)=>v+(-camera.forward[i]*20+camera.right[i]*.8+camera.up[i]*.2)/radius);
     for(let i=1;i<=48;i++) {
       const p=target.map((v,j)=>v+(eye[j]-v)*i/48),floor=gameGround(this.view,p[0],p[2]);
       if(floor!==null && p[1]*radius<floor+.25) {

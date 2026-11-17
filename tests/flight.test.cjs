@@ -93,14 +93,14 @@ test('position relative to start uses horizontal distance, compass direction, an
 });
 
 
-test('third-person camera is close while avatar size and hand-mounted laser stay in world metres',()=>{
+test('third-person camera keeps its original distance while avatar and laser stay in world metres',()=>{
   for(const radius of [1000,100000]) {
     const view=terrain(()=>0);view.model.radius=radius;view.canvas={clientWidth:390,clientHeight:844};
     const game=Object.create(TerrainGame.prototype);
     Object.assign(game,{view,position:[0,0,0],yaw:0,heading:2,tilt:.24,phase:0,speed:0,flying:false,thirdPerson:true});
     const camera=game.camera(),eye=game.aimCamera().eye;
     const distance=Math.hypot(...camera.eye.map((v,i)=>v-eye[i]))*radius;
-    assert.ok(distance>4 && distance<5);
+    assert.ok(distance>=20 && distance<20.1);
     const avatar=gameAvatar(game,radius),heights=[];
     for(let i=1;i<avatar.length;i+=9)heights.push(avatar[i]*radius);
     assert.ok(Math.max(...heights)>1.77 && Math.max(...heights)<1.80);
