@@ -1009,8 +1009,7 @@ const mcv = $("mp"), mtx = mcv.getContext("2d");
 const satelliteMap = new SatelliteMap(() => { MP.dirty = true; });
 $("sat-retry").onclick = () => satelliteMap.retry();
 let mw = 0, mh = 0, mdpr = 0;
-function fitMapCanvas() {          // -> did the geometry change?
-  const r = mcv.getBoundingClientRect();
+function fitMapCanvas(r = mcv.getBoundingClientRect()) { // -> did the geometry change?
   const d = Math.min(3, window.devicePixelRatio || 1);
   if (r.width === mw && r.height === mh && d === mdpr) return false;
   mw = r.width; mh = r.height; mdpr = d;
@@ -1518,6 +1517,8 @@ $("custom-height").value = photoCustomHeight;
 
 function setMapView(view) {
   const changingMode = view !== mapView;
+  const fitSelectedTerrain = changingMode && view === '3d' && HZ.selAz != null &&
+    (mapView === 'perspective' || mapView === 'game');
   if (!["2d", "3d", "perspective", "game"].includes(view)) return;
   if ((view === "perspective" || view === "game") && !terrainData) return;
   if (view === 'game' && !S.pos) return;
@@ -1550,12 +1551,19 @@ function setMapView(view) {
         terrainView.setModel(terrainData);
       }
       if (terrainView.lost) throw new Error("3D graphics are still recovering. Please try again shortly.");
-      if (mapView === "2d") {
-        if (fitMapCanvas()) mpFit();
+      if (mapView === "2d" || fitSelectedTerrain) {
+        if (fitSelectedTerrain) {
+          // Fit the destination pane, not Walk's temporary fullscreen canvas.
+          const leavingGame = mapView === 'game';
+          if (leavingGame) document.body.classList.remove('game-mode');
+          try { fitMapCanvas($("mp3d").getBoundingClientRect()); }
+          finally { if (leavingGame) document.body.classList.add('game-mode'); }
+          mpFitSelection();
+        } else if (fitMapCanvas()) mpFit();
         terrainView.matchMapView({ ...MP, height: mh });
       }
-      // A fresh 2D framing takes precedence over the saved orbit camera.
-      if (changingMode && terrainModeViews[view] && !(mapView === '2d' && view === '3d'))
+      // Map framing and newly selected paths take precedence over a saved orbit camera.
+      if (changingMode && terrainModeViews[view] && !((mapView === '2d' || fitSelectedTerrain) && view === '3d'))
         terrainView.restoreView(terrainModeViews[view]);
       else if (changingMode) terrainView.photoView = false;
       if (view === "3d") terrainView.photoView = false;

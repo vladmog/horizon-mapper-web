@@ -678,3 +678,52 @@ test("Viewpoint selection uses the horizon fit when returning to Map", async () 
   assert.ok(Math.hypot(bounds.a[0]-bounds.b[0],bounds.a[1]-bounds.b[1])>Math.min(bounds.w,bounds.h)*.5);
   await close(page);
 });
+
+test("direct Viewpoint to Terrain fits the selected path exactly like going through Map", async () => {
+  for(const [start,end] of [[{width:844,height:390},{width:390,height:844}],[{width:390,height:844},{width:844,height:390}]]) {
+    const page=await pageFor(start,true);await mapCoordinates(page);
+    await page.locator('[data-v="3d"]').click();
+    await page.waitForFunction(()=>!HZ.loading && terrainView?.model);
+    await page.evaluate(()=>{terrainView.orbit(.4,-.3);terrainView.zoom(.5);});
+    await page.locator('#map-perspective').click();
+    await page.waitForFunction(()=>!HZ.loading && terrainView.photoCamera);
+    const rect=await page.locator('#mp3d').boundingBox();
+    await page.locator('#mp3d').click({position:{x:rect.width/2,y:rect.height*.8}});
+    await page.waitForFunction(()=>HZ.pinnedTarget!==null);
+    await page.setViewportSize(end);
+    await page.locator('[data-v="3d"]').click();
+    await page.waitForFunction(()=>mapView==='3d' && !HZ.loading && HZ.selAz!==null && terrainView.model);
+    const camera=()=>page.evaluate(()=>({focus:[...terrainView.focus],distance:terrainView.distance,yaw:terrainView.yaw,tilt:terrainView.tilt,orthographic:terrainView.orthographic}));
+    const direct=await camera();
+    await page.locator('[data-v="2d"]').click();
+    await page.waitForFunction(()=>mapView==='2d' && document.getElementById('mp').width>0);
+    await page.locator('[data-v="3d"]').click();
+    await page.waitForFunction(()=>mapView==='3d' && !HZ.loading);
+    const viaMap=await camera();
+    assert.deepEqual(direct,viaMap);
+    assert.equal(direct.orthographic,true);
+    await close(page);
+  }
+});
+
+test("exiting Walk to Terrain fits a marked target exactly like going through Map", async () => {
+  for(const size of [{width:390,height:844},{width:844,height:390}]) {
+    const page=await pageFor(size,true);await mapCoordinates(page);
+    await page.locator('[data-v="3d"]').click();
+    await page.waitForFunction(()=>!HZ.loading && terrainView?.model);
+    await page.evaluate(()=>{terrainView.orbit(.4,-.3);terrainView.zoom(.5);});
+    await page.locator('#map-game').click();
+    await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-target').disabled);
+    await page.locator('#game-target').click();
+    await page.locator('#game-exit').click();
+    await page.waitForFunction(()=>mapView==='3d' && !HZ.loading && HZ.selAz!==null);
+    const camera=()=>page.evaluate(()=>({focus:[...terrainView.focus],distance:terrainView.distance,yaw:terrainView.yaw,tilt:terrainView.tilt,orthographic:terrainView.orthographic}));
+    const direct=await camera();
+    await page.locator('[data-v="2d"]').click();
+    await page.locator('[data-v="3d"]').click();
+    await page.waitForFunction(()=>mapView==='3d' && !HZ.loading);
+    assert.deepEqual(direct,await camera());
+    assert.equal(direct.orthographic,true);
+    await close(page);
+  }
+});
