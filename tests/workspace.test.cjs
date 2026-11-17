@@ -531,3 +531,31 @@ test("Viewpoint taps select the visible terrain without treating drags or sky as
   assert.equal(await page.evaluate(() => HZ.selAz), null);
   await close(page);
 });
+
+
+test("Walk keeps a wide horizontal view on portrait phones and its original landscape lens", async () => {
+  const page = await pageFor({ width: 390, height: 844 }, true);
+  await mapCoordinates(page);
+  await page.locator('#map-game').click();
+  await page.waitForFunction(() => mapView === 'game' && terrainView.game.active);
+  const camera = () => page.evaluate(() => {
+    const camera = terrainView.game.camera(), canvas = terrainView.canvas;
+    return { focal: camera.focal, aspect: canvas.clientWidth / canvas.clientHeight,
+      eye: camera.eye, forward: camera.forward };
+  });
+  const portrait = await camera();
+  const degrees = radians => radians * 180 / Math.PI;
+  assert.ok(Math.abs(degrees(2 * Math.atan(portrait.aspect / portrait.focal)) - 60) < .01);
+  await page.screenshot({ path: '/tmp/horizon-walk-portrait-wide.png' });
+  await page.setViewportSize({ width: 844, height: 390 });
+  await page.waitForFunction(() => terrainView.canvas.clientWidth > terrainView.canvas.clientHeight);
+  const landscape = await camera();
+  assert.ok(Math.abs(landscape.focal - 1 / Math.tan(Math.PI / 6)) < 1e-9);
+  assert.deepEqual(landscape.eye, portrait.eye);
+  assert.deepEqual(landscape.forward, portrait.forward);
+  await page.screenshot({ path: '/tmp/horizon-walk-landscape.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForFunction(() => terrainView.canvas.clientWidth < terrainView.canvas.clientHeight);
+  assert.equal((await camera()).focal, portrait.focal);
+  await close(page);
+});

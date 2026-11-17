@@ -151,7 +151,12 @@ class TerrainGame {
     const norm=Math.hypot(...forward);for(let i=0;i<3;i++)forward[i]/=norm;
     const right=[-forward[2],0,forward[0]],rn=Math.hypot(...right);for(let i=0;i<3;i++)right[i]/=rn;
     const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
-    return {eye,right,up,forward,focal:1/Math.tan(Math.PI/6),near:.05/radius,far:Math.max(4,eye[1]+4),halfHeight:0,groundElevation:gameGround(this.view,this.position[0],this.position[2])};
+    const width=this.view.canvas?.clientWidth || 0,height=this.view.canvas?.clientHeight || 0;
+    // Keep a 60-degree horizontal view on portrait phones instead of cropping
+    // the landscape camera down to a narrow slice. Landscape stays unchanged.
+    const portrait=width>0 && width<=900 && height>width;
+    const focal=(portrait ? width/height : 1)/Math.tan(Math.PI/6);
+    return {eye,right,up,forward,focal,near:.05/radius,far:Math.max(4,eye[1]+4),halfHeight:0,groundElevation:gameGround(this.view,this.position[0],this.position[2])};
   }
   laser() {
     const camera=this.camera(),radius=this.view.model.radius;

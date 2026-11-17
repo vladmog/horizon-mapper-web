@@ -2018,16 +2018,18 @@ body.game-mode .selection-tools { display: none; }
 }
 #live-readout {
   position: absolute;
-  bottom: 22px;
-  left: 0;
-  right: 0;
-  padding: 12px 10px 7px;
-  background: linear-gradient(transparent, #111111ed 35%);
+  bottom: 26px;
+  right: 8px;
+  width: max-content;
+  padding: 5px 7px;
+  border-radius: 4px;
+  background: #111111a6;
   color: #fff;
   pointer-events: none;
 }
-.live-label { display: block; color: #ddd; font-size: 9px; margin-bottom: 4px; }
-.live-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
-.live-metrics span { display: block; font-size: 9px; color: #ddd; }
-.live-metrics strong { display: block; font: 12px/1.5 var(--mono); white-space: nowrap; }
+.live-label { display: block; color: #ccc; font-size: 8px; margin-bottom: 3px; }
+.live-metrics { display: grid; gap: 1px; }
+.live-metrics > div { display: flex; align-items: baseline; justify-content: space-between; gap: 9px; }
+.live-metrics span { font-size: 9px; color: #ddd; }
+.live-metrics strong { font: 10px/1.3 var(--mono); white-space: nowrap; }
 body.game-mode .view-tap-hint { display: none; }
