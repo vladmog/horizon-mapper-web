@@ -1258,8 +1258,8 @@ test('system dark mode keeps controls readable and changes live without losing t
   }
 });
 
-test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',async()=>{
-  for(const size of [{width:390,height:844},{width:844,height:390}])for(const source of ['coordinates','photo']) {
+test('Viewpoint enters Walk at the same height and aim without inheriting zoom',async()=>{
+  for(const size of [{width:390,height:844},{width:844,height:390}])for(const source of ['coordinates','photo'])for(const zoom of [.35,3]) {
     const page=await pageFor(size,true);
     if(source==='coordinates') {
       await mapCoordinates(page);await page.locator('[data-v="perspective"]').click();
@@ -1274,12 +1274,12 @@ test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',asy
       await page.waitForFunction(()=>S.locationSource==='photo' && !HZ.loading && mapView==='perspective');
     }
     await page.waitForFunction(()=>terrainView?.photoView && terrainView?.photoCamera);
-    await page.evaluate(()=>{
-      terrainView.lookPhoto(43,-27);terrainView.zoom(.7);
+    await page.evaluate(zoom=>{
+      terrainView.lookPhoto(43,-27);terrainView.zoom(zoom);
       // A previous third-person session must not offset this camera handoff.
       terrainView.game ||= new TerrainGame(terrainView);terrainView.game.thirdPerson=true;
       window.__handoffProfile=HZ.P;
-    });
+    },zoom);
     await page.waitForTimeout(150);
     const before=await page.evaluate(()=>{
       const camera=terrainView.photoCamera;
@@ -1300,7 +1300,9 @@ test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',asy
       assert.ok(Math.abs(after.eye[i]-expected)<1e-9,`${source} camera eye axis ${i}`);
       assert.ok(Math.abs(after.forward[i]-before.forward[i])<1e-9,`${source} aim axis ${i}`);
     }
-    assert.ok(Math.abs(after.fov-before.fov)<1e-8);
+    const normalFov=size.height>size.width ? 60 : 360/Math.PI*Math.atan(size.width/size.height*Math.tan(Math.PI/6));
+    assert.ok(Math.abs(after.fov-normalFov)<1e-8,'Walk uses its standard lens');
+    assert.ok(Math.abs(after.fov-before.fov)>1,'test must exercise a different Viewpoint zoom');
     assert.equal(after.flying,before.eye[1]*before.radius>before.ground+1.70);
     assert.equal(after.requests,before.requests);assert.equal(after.sameProfile,true);
     await page.waitForTimeout(200);
@@ -1313,6 +1315,7 @@ test('Viewpoint enters Walk at the same eye height, aim and horizontal lens',asy
     assert.equal(await page.evaluate(()=>terrainView.game.flying),after.flying);
     await page.locator('#game-exit').click();
     await page.waitForFunction(()=>mapView==='perspective');
+    assert.equal(await page.evaluate(()=>terrainView.photoFov),before.fov,'Viewpoint retains its own zoom');
     await close(page);
   }
 });

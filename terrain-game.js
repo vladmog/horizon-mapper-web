@@ -101,7 +101,6 @@ class TerrainGame {
     this.position=[point[0],Math.max(ground,camera ? camera.eye[1]*radius-1.65 : ground)/radius,point[2]];
     this.yaw=camera ? Math.atan2(-camera.forward[0],-camera.forward[2]) : -bearing*Math.PI/180;
     this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
-    this.horizontalFov=camera?.horizontalFov ?? null;
     if(camera)this.thirdPerson=false;
     this.flying=this.position[1]*radius>ground+.05;
     this.spawn=[...this.position];this.spawnFlying=this.flying;this.heading=this.yaw;
@@ -234,9 +233,7 @@ class TerrainGame {
     // Keep a 60-degree horizontal view on portrait phones instead of cropping
     // the landscape camera down to a narrow slice. Landscape stays unchanged.
     const portrait=width>0 && width<=900 && height>width;
-    const focal=this.horizontalFov
-      ? (width/height)/Math.tan(this.horizontalFov*Math.PI/360)
-      : (portrait ? width/height : 1)/Math.tan(Math.PI/6);
+    const focal=(portrait ? width/height : 1)/Math.tan(Math.PI/6);
     return {eye,right,up,forward,focal,near:.05/radius,far:Math.max(4,eye[1]+4),halfHeight:0,groundElevation:gameGround(this.view,this.position[0],this.position[2])};
   }
   camera() {

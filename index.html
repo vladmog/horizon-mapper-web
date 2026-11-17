@@ -1583,12 +1583,11 @@ function setMapView(view) {
   if (!["2d", "3d", "perspective", "game"].includes(view)) return;
   if ((view === "perspective" || view === "game") && !terrainData) return;
   if (view === 'game' && !S.pos) return;
-  // Capture Viewpoint before restoring another mode or resizing to fullscreen.
+  // Keep Viewpoint position and aim; Walk always uses its own normal lens.
   const walkCamera = view === 'game' && changingMode && mapView === 'perspective' && terrainView?.photoView
-    ? {...terrainPhotoCamera(terrainData, {...perspectiveSource(),
+    ? terrainPhotoCamera(terrainData, {...perspectiveSource(),
         pitch:Math.max(-80,Math.min(80,terrainView.photoPitch+(terrainView.photoSource.sensorPitch || 0))),
-        fov:terrainView.photoFov}, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight),
-        horizontalFov:terrainView.photoFov}
+        fov:terrainView.photoFov}, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight)
     : null;
   if (view === 'game' && changingMode) {
     const p=terrainPoint(terrainData,{lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,elev:0});
