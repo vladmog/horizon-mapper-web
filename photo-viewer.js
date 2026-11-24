@@ -4,14 +4,22 @@ class PhotoViewer {
     this.viewport = viewport; this.image = image; this.button = resetButton;
     this.points = new Map(); this.scale = 1; this.x = 0; this.y = 0;
     this.anchor = null;
+    viewport.addEventListener("contextmenu", e => { if (e.ctrlKey) e.preventDefault(); });
     viewport.addEventListener("pointerdown", e => {
       if (!image.naturalWidth || image.hidden || (e.pointerType === "mouse" && e.button !== 0)) return;
       e.preventDefault(); viewport.setPointerCapture(e.pointerId);
       this.points.set(e.pointerId, this.local(e)); this.reanchor();
+      this.zoomDrag = e.pointerType === "mouse" && e.ctrlKey ? { id: e.pointerId, ...this.local(e), scale: this.scale, tx: this.x, ty: this.y } : null;
     });
     viewport.addEventListener("pointermove", e => {
       if (!this.points.has(e.pointerId)) return;
       e.preventDefault(); this.points.set(e.pointerId, this.local(e));
+      if (this.zoomDrag?.id === e.pointerId) {
+        const a = this.zoomDrag, scale = Math.max(1, Math.min(8, a.scale * Math.exp((a.y - this.local(e).y) / 180)));
+        this.x = a.x - (a.x - a.tx) * scale / a.scale;
+        this.y = a.y - (a.y - a.ty) * scale / a.scale;
+        this.scale = scale; this.render(); return;
+      }
       const p = this.gesture(), a = this.anchor;
       if (!a) return;
       const scale = Math.max(1, Math.min(8, a.scale * p.distance / a.distance));
@@ -21,6 +29,7 @@ class PhotoViewer {
     });
     const end = e => {
       if (!this.points.delete(e.pointerId)) return;
+      if (this.zoomDrag?.id === e.pointerId) this.zoomDrag = null;
       if (viewport.hasPointerCapture(e.pointerId)) viewport.releasePointerCapture(e.pointerId);
       this.reanchor();
     };
@@ -54,7 +63,7 @@ class PhotoViewer {
     this.anchor = p ? { ...p, scale: this.scale, tx: this.x, ty: this.y } : null;
   }
   reset() {
-    const ids = [...this.points.keys()]; this.points.clear(); this.anchor = null;
+    const ids = [...this.points.keys()]; this.points.clear(); this.anchor = null; this.zoomDrag = null;
     for (const id of ids) if (this.viewport.hasPointerCapture(id)) this.viewport.releasePointerCapture(id);
     this.scale = 1; this.x = this.y = 0; this.render();
   }

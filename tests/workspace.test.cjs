@@ -947,6 +947,11 @@ test('photo opens beside an equal Viewpoint pane, with optional horizon and phot
     assert.equal(await page.locator('#photo-viewport').isVisible(),false);
     await page.locator('#comparison-photo').click();await assertSplit(page,true);
   }
+  const photoRect=await page.locator('#photo-viewport').boundingBox();
+  await page.keyboard.down('Control');await page.mouse.move(photoRect.x+photoRect.width/2,photoRect.y+photoRect.height/2);await page.mouse.down();
+  await page.mouse.move(photoRect.x+photoRect.width/2,photoRect.y+photoRect.height/2-60,{steps:12});
+  assert.ok(await page.evaluate(()=>photoViewer.scale>1.3));
+  await page.mouse.up();await page.keyboard.up('Control');await page.locator('#photo-fit').click();
   await page.locator('#photo-viewport').hover();await page.mouse.wheel(0,-150);
   await page.waitForFunction(()=>photoViewer.scale>1);
   await page.mouse.wheel(0,300);await page.waitForFunction(()=>photoViewer.scale===1);
@@ -2169,5 +2174,29 @@ test('plain mouse wheel zooms the map both ways without scrolling the page',asyn
   assert.equal(await page.evaluate(()=>window.scrollY),before.scroll);
   await page.keyboard.down('Control');await page.mouse.wheel(0,-60);await page.keyboard.up('Control');
   await page.waitForFunction(k=>MP.k>=k*.99,zoomed);
+  await close(page);
+});
+
+test('Ctrl drag smoothly zooms map and both terrain cameras without rotating',async()=>{
+  const page=await pageFor({width:1440,height:900},true);await mapCoordinates(page);
+  async function drag(selector,read,increases) {
+    const r=await page.locator(selector).boundingBox(),x=r.x+r.width/2,y=r.y+r.height/2;
+    const before=await page.evaluate(read);
+    await page.keyboard.down('Control');await page.mouse.move(x,y);await page.mouse.down();
+    await page.mouse.move(x,y-30,{steps:5});
+    const middle=await page.evaluate(read);
+    await page.mouse.move(x,y-60,{steps:5});
+    const after=await page.evaluate(read);
+    assert.ok(increases ? before<middle && middle<after : before>middle && middle>after);
+    await page.mouse.move(x,y,{steps:10});await page.mouse.up();await page.keyboard.up('Control');
+    assert.ok(Math.abs((await page.evaluate(read))/before-1)<.001);
+  }
+  await drag('#mp',()=>MP.k,true);
+  for(const selector of ['[data-v="3d"]','#map-perspective']) {
+    await page.locator(selector).click();await page.waitForTimeout(150);
+    const orientation=await page.evaluate(()=>[terrainView.yaw,terrainView.tilt,terrainView.photoPitch]);
+    await drag('#mp3d',()=>terrainView.photoView?terrainView.photoFov:terrainView.distance,false);
+    assert.deepEqual(await page.evaluate(()=>[terrainView.yaw,terrainView.tilt,terrainView.photoPitch]),orientation);
+  }
   await close(page);
 });

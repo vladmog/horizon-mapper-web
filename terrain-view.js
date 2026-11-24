@@ -619,12 +619,14 @@ class TerrainView {
   }
   bindGestures() {
     const c = this.canvas;
+    c.addEventListener('contextmenu', e => { if (e.ctrlKey) e.preventDefault(); });
     c.addEventListener('pointerdown', e => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
       e.preventDefault(); c.setPointerCapture(e.pointerId);
       this.points.set(e.pointerId,{x:e.clientX,y:e.clientY}); this.anchor=this.gesture();
+      this.zoomDrag = this.points.size === 1 && e.pointerType === 'mouse' && e.ctrlKey;
       if (this.points.size === 1) this.panDrag=!this.photoView && e.pointerType==='mouse' && e.shiftKey;
-      if (this.points.size === 1 && !this.panDrag) {
+      if (this.points.size === 1 && !this.panDrag && !this.zoomDrag) {
         if (!this.photoView) this.orbitPivot=this.chooseOrbitPivot();
         this.orbitTap={x:e.clientX,y:e.clientY,time:Date.now()};
       } else this.orbitTap=null;
@@ -644,7 +646,8 @@ class TerrainView {
           if (this.photoView) this.lookPhoto(dx,dy);
           else this.pan(dx,dy);
         } else if (!p.multi && !a.multi) {
-          if (this.photoView) this.lookPhoto(dx,dy);
+          if (this.zoomDrag) this.zoom(Math.exp(dy / 180));
+          else if (this.photoView) this.lookPhoto(dx,dy);
           else if (this.panDrag) this.pan(dx,dy);
           else this.orbit(-dx*.008,dy*.008,this.orbitPivot);
         }
@@ -666,7 +669,7 @@ class TerrainView {
         }
       }
       this.points.delete(e.pointerId);
-      if (!this.points.size) this.panDrag=false;
+      if (!this.points.size) { this.panDrag=false; this.zoomDrag=false; }
       if(c.hasPointerCapture(e.pointerId))c.releasePointerCapture(e.pointerId);this.anchor=this.gesture();
       // Re-evaluate after a two-finger pan/zoom, then hold the pivot steady for
       // the next one-finger orbit so it cannot switch halfway through a drag.

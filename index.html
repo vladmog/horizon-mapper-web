@@ -1449,13 +1449,14 @@ function mpZoomAbout(x, y, k) {
   mpFreeZoom();
 }
 
+mcv.addEventListener("contextmenu", e => { if (e.ctrlKey) e.preventDefault(); });
 mcv.addEventListener("pointerdown", e => {
   if (!HZ.P || (e.pointerType === "mouse" && e.button !== 0)) return;
   e.preventDefault();
   mcv.setPointerCapture(e.pointerId);
   const [x, y] = mpLocal(e);
   pts.set(e.pointerId, { x0: x, y0: y, t0: Date.now(), x, y, moved: false,
-    cx: MP.cx, cy: MP.cy });
+    cx: MP.cx, cy: MP.cy, zoomDrag: e.pointerType === "mouse" && e.ctrlKey, lastY: y });
   if (pts.size === 2 && HZ.P) {
     multi = true;
     const [mx, my, d] = mpMid();
@@ -1476,6 +1477,11 @@ mcv.addEventListener("pointermove", e => {
   [p.x, p.y] = mpLocal(e);
   if (Math.hypot(p.x - p.x0, p.y - p.y0) > 6) p.moved = true;
   if (pts.size === 1) {
+    if (p.zoomDrag) {
+      e.preventDefault(); p.moved = true;
+      mpZoomAbout(p.x0, p.y0, MP.k * Math.exp((p.lastY - p.y) / 180));
+      p.lastY = p.y; return;
+    }
     if (!p.moved) return;
     MP.cx = p.cx - (p.x - p.x0) / MP.k;
     MP.cy = p.cy - (p.y - p.y0) / MP.k;
@@ -1513,7 +1519,7 @@ function mpEnd(e) {
 
 mcv.addEventListener("pointerup", e => {
   const p = mpEnd(e);
-  if (!p || p.moved || !HZ.P) return;
+  if (!p || p.moved || p.zoomDrag || !HZ.P) return;
   const [x, y] = mpLocal(e);
   // A selection is a tap: it went nowhere and did not linger. Anything longer
   // or further was a pan, a pinch, or a press.
