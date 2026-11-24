@@ -233,6 +233,57 @@ function terrainPerspectiveImageryPlans(model, camera, pixelHeight) {
   return plans;
 }
 
+// Find the first visible mesh surface along a screen ray. A third-person
+// camera may sit just outside the mesh even when its avatar is inside.
+function walkImageryHit(view, camera, aspect, x, y) {
+  const ray=camera.forward.map((v,i)=>v+(camera.right[i]*x*aspect+camera.up[i]*y)/camera.focal);
+  const length=Math.hypot(...ray), direction=ray.map(v=>v/length);
+  let enter=0, exit=camera.far*length;
+  for (const i of [0,2]) {
+    if (Math.abs(direction[i])<1e-12) {
+      if (Math.abs(camera.eye[i])>1) return null;
+      continue;
+    }
+    const a=(-1-camera.eye[i])/direction[i], b=(1-camera.eye[i])/direction[i];
+    enter=Math.max(enter,Math.min(a,b));exit=Math.min(exit,Math.max(a,b));
+  }
+  if (enter>=exit) return null;
+  const origin=camera.eye.map((v,i)=>v+direction[i]*enter);
+  for (const i of [0,2]) origin[i]=Math.max(-1,Math.min(1,origin[i]));
+  const hit=gameRaycast(view,origin,direction);
+  if (!hit) return null;
+  const depth=hit.reduce((sum,v,i)=>sum+(v-camera.eye[i])*camera.forward[i],0);
+  return depth>camera.near && depth<camera.far ? {hit,depth} : null;
+}
+
+function walkImageryPlans(view, camera, width, height) {
+  const m=view.model;
+  const base=Math.max(0,Math.min(23,Math.round(m.z+Math.log2(512/m.half))));
+  const samples=[];
+  // The center has first choice at its projected resolution. Lower screen
+  // samples can then place finer levels over the nearer, visible foreground.
+  for (const [x,y] of [[0,0],[0,-.22],[-.55,0],[.55,0],[0,.45],[0,-.65],[0,-.94]]) {
+    const sample=walkImageryHit(view,camera,width/height,x,y);
+    if (!sample) continue;
+    const texel=Math.max(.25,2*sample.depth*m.radius/(height*camera.focal));
+    sample.level=Math.min(23,Math.ceil(m.z+Math.log2(m.radius/(m.half*texel))));
+    samples.push(sample);
+  }
+  const finest=Math.max(base,...samples.map(s=>s.level));
+  const count=Math.min(8,finest-base), plans=[];
+  for (let i=1;i<=count;i++) {
+    const level=base+Math.round(i*(finest-base)/count);
+    const focus=samples.find(s=>s.level>=level).hit;
+    const old=view.detailPlans.find(p=>p.level===level);
+    // Keep a resident Terrain or Walk layer while the desired point is in
+    // its central half. Small head movements need no new tile requests.
+    if (old && Math.abs(m.cx+focus[0]*m.half-old.cx)<=old.half*.5 &&
+        Math.abs(m.cy+focus[2]*m.half-old.cy)<=old.half*.5) plans.push(old);
+    else plans.push(terrainImageryPatch(m,{focus},level,1024));
+  }
+  return plans;
+}
+
 // A vertical world-space billboard: its foot stays at the marked terrain point.
 // A small screen-space minimum keeps distant markers legible without widening
 // a nearby beam across the view. The shader supplies the soft edge and core.
@@ -419,7 +470,7 @@ class TerrainView {
     this.orbitSource = this.orbitTarget = null;
     this.imagery.releaseView('base');
     for (const plan of this.detailPlans) this.imagery.releaseView(`detail-${plan.level}`);
-    this.detailPlans = [];
+    this.detailPlans = []; this.walkImagery=null;
     if (model && !this.lost) this.uploadMesh();
     this.resetCamera(); this.textureDirty = this.detailDirty = this.dirty = true;
   }
@@ -633,8 +684,18 @@ class TerrainView {
     const photoCamera = !gameCamera && this.photoView ? terrainPhotoCamera(this.model,
       {...this.photoSource,pitch:Math.max(-80,Math.min(80,this.photoPitch+(this.photoSource.sensorPitch || 0))),fov:this.photoFov},w/h) : null;
     this.photoCamera = photoCamera;
-    const plans = (gameCamera || photoCamera) ? terrainPerspectiveImageryPlans(this.model, gameCamera || photoCamera, h)
-      : terrainImageryPlans(this.model, this, h);
+    let plans;
+    if (gameCamera) {
+      const pose=[...gameCamera.eye,...gameCamera.forward,...gameCamera.right,gameCamera.focal,w,h].join('/');
+      const now=performance.now(), previous=this.walkImagery;
+      if (!previous || previous.mesh!==this.mesh || (previous.pose!==pose && now-previous.time>=250)) {
+        this.walkImagery={pose,time:now,mesh:this.mesh,plans:walkImageryPlans(this,gameCamera,w,h)};
+      }
+      plans=this.walkImagery.plans;
+    } else {
+      this.walkImagery=null;
+      plans=photoCamera ? terrainPerspectiveImageryPlans(this.model,photoCamera,h) : terrainImageryPlans(this.model,this,h);
+    }
     if (plans.map(p => p.key).join('|') !== this.detailPlans.map(p => p.key).join('|')) {
       for (const old of this.detailPlans) if (!plans.some(p => p.level === old.level))
         this.imagery.releaseView(`detail-${old.level}`);

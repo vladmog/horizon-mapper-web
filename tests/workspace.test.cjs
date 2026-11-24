@@ -1955,3 +1955,67 @@ test('a photo selected after Search becomes Start for an elevated, displaced Ter
   assert.equal(await page.evaluate(()=>S.photoName),'source-marker.png');
   await close(page);
 });
+
+test('Walk allocates bounded imagery to the visible mesh and keeps useful Terrain layers',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await mapCoordinates(page);
+  await page.locator('[data-v="3d"]').click();
+  const result=await page.evaluate(()=>{
+    const v=terrainView,r=v.model.radius;
+    v.resetCamera();v.focus=[.1,gameGround(v,.1,-.2)/r,-.2];v.distance=.22;v.yaw=.5;v.tilt=.3;
+    const c=terrainOrbitCamera(v),w=780,h=1688;
+    v.detailPlans=terrainImageryPlans(v.model,v,h);
+    const first=walkImageryPlans(v,c,w,h);
+    const hit=walkImageryHit(v,c,w/h,0,0).hit;
+    function coverage(plans,point) {
+      return plans.filter(p=>Math.abs(v.model.cx+point[0]*v.model.half-p.cx)<=p.half &&
+        Math.abs(v.model.cy+point[2]*v.model.half-p.cy)<=p.half).at(-1)?.level || 0;
+    }
+    const old=terrainPerspectiveImageryPlans(v.model,c,h);
+    const retained=first.filter(p=>v.detailPlans.includes(p)).length;
+    v.detailPlans=first;
+    const nudge={...c,eye:c.eye.map((n,i)=>n+(i===0?.000001:0))};
+    const near=walkImageryPlans(v,nudge,w,h);
+    const ground=gameGround(v,0,0)/r;
+    const horizon={...c,eye:[0,ground+.06,0],forward:[0,.15,-Math.sqrt(1-.15**2)],right:[1,0,0],up:[0,Math.sqrt(1-.15**2),.15],focal:1.73};
+    const horizonMiss=walkImageryHit(v,horizon,w/h,0,0)===null;
+    const lower=walkImageryHit(v,horizon,w/h,0,-.65);
+    const grazing=walkImageryPlans(v,horizon,w,h);
+    const sky={...horizon,eye:[0,2,0],forward:[0,1,0],up:[0,0,1]};
+    return {count:first.length,retained,newLevel:coverage(first,hit),oldLevel:coverage(old,hit),
+      steady:near.every((p,i)=>p===first[i]),horizonMiss,lowerLevel:lower&&coverage(grazing,lower.hit),
+      sky:walkImageryPlans(v,sky,w,h).length};
+  });
+  assert.ok(result.count>0 && result.count<=8);
+  assert.ok(result.newLevel>result.oldLevel && result.retained>0,JSON.stringify(result));
+  assert.ok(result.steady && result.horizonMiss && result.lowerLevel>0,JSON.stringify(result));
+  assert.equal(result.sky,0);
+  await close(page);
+});
+
+test('Walk bounds tile requests through repeated handoffs and horizon look changes while imagery loads',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  const held=[];
+  await page.route('**/World_Imagery/MapServer/tile/**',route=>{held.push(route);});
+  await mapCoordinates(page);
+  await page.locator('[data-v="3d"]').click();
+  await page.evaluate(()=>{
+    const v=terrainView;v.resetCamera();v.zoom(.025);v.orbit(.7,-.42);
+  });
+  for(let i=0;i<3;i++){
+    await page.locator('#map-game').click();
+    if(i===1)await page.locator('#game-camera').click();
+    const state=await page.evaluate(async()=>{
+      const v=terrainView,g=v.game;
+      g.tilt=.03;await new Promise(r=>setTimeout(r,290));v.dirty=true;drawTerrainView();
+      const plan=v.walkImagery;g.lookBy(0,-1);v.dirty=true;drawTerrainView();
+      return {rateLimited:v.walkImagery===plan || v.walkImagery.time-plan.time>=250,active:v.imagery.active,layers:v.detailPlans.length,
+        views:v.imagery.views.size,cache:v.imagery.cache.size,finite:v.activeCamera.forward.every(Number.isFinite)};
+    });
+    assert.ok(state.rateLimited && state.finite && state.active<=6 && state.layers<=8 && state.views<=9 && state.cache<=6,JSON.stringify(state));
+    await page.locator('#game-exit').click();
+  }
+  assert.ok(held.length>0);
+  await Promise.all(held.map(route=>route.abort()));
+  await close(page);
+});
