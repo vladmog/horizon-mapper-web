@@ -65,7 +65,10 @@ See `docs/ui-redesign.md` for the acceptance criteria, browser checks, and devic
 
 Walk starts with its first-person eye at least 30 metres above the rendered
 terrain, whether entered from Map, Terrain, or Viewpoint. A higher Viewpoint
-camera keeps its height and aim, while Walk uses its own lens. Fly to Target
+camera keeps its height and aim, while Walk uses its own lens. From Terrain,
+Walk starts at the orbit camera’s eye and faces the same direction. A camera
+outside the loaded terrain starts at the nearest edge. The usual 30 m minimum
+eye height and 5,000 m flight ceiling (measured at the avatar’s feet) apply. Fly to Target
 and Fly to Start restore that session’s initial clearance above local terrain,
 even after manually landing or changing altitude.
 

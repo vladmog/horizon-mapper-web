@@ -1647,7 +1647,8 @@ test('every Walk entry starts airborne and both Fly to actions restore its terra
     assert.ok(start.height>=Math.max(30,height)-1e-6,`${source}/${view}: started at ${start.height} m instead of airborne`);
     assert.equal(start.flying,true);
     await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'spawn holds altitude');
-    await page.evaluate(()=>{terrainView.game.tilt=.4;});
+    // From the overhead Terrain camera a shallow ray overshoots the 2 km fixture.
+    await page.evaluate(view=>{terrainView.game.tilt=view==='3d' ? 1.4 : .4;},view);
     await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
     await page.locator('#game-target').click();
     const selected=await page.evaluate(()=>terrainPoint(terrainData,HZ.pinnedTarget.point));
@@ -1709,5 +1710,48 @@ test("location search maps addresses and disambiguates mountain names", async ()
   await submit("35.1 139.2");
   await page.waitForFunction(() => window.__lastRequest?.lat === 35.1 && window.__lastRequest.lon === 139.2);
   assert.equal(calls, 5);
+  await close(page);
+});
+
+test('Terrain hands its rendered orbit eye and direction to Walk after navigating', async () => {
+  const page = await pageFor({width: 1200, height: 800}, true);
+  await mapCoordinates(page);
+  await page.locator('[data-v="3d"]').click();
+  for (const scenario of ['inside', 'outside', 'near ground']) {
+    const expected = await page.evaluate(scenario => {
+      const v = terrainView;
+      v.resetCamera();
+      v.zoom(.012);
+      v.orbit(.8, -.24);
+      v.pan(-140, 65);
+      if (scenario === 'outside') { v.zoom(80); v.pan(100000, -100000); }
+      if (scenario === 'near ground') {
+        v.zoom(.0001);
+        v.focus[1] = gameGround(v, v.focus[0], v.focus[2]) / v.model.radius;
+      }
+      v.dirty = true;
+      return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+        const {eye, forward} = v.activeCamera;
+        const x = Math.max(-1, Math.min(1, eye[0])), z = Math.max(-1, Math.min(1, eye[2]));
+        const ground = gameGround(v, x, z), r = v.model.radius;
+        resolve({eye, focus: v.focus, forward, x, z, ground, r});
+      })));
+    }, scenario);
+    const {eye, focus, forward, x, z, ground, r} = expected;
+    if (scenario === 'inside') {
+      assert.ok(Math.hypot(x,z) > .005 && Math.hypot(x-focus[0],z-focus[2]) > .005);
+      assert.ok(eye[1]*r > ground+30 && eye[1]*r < ground+5000);
+    }
+    if (scenario === 'outside') assert.ok(x !== eye[0] || z !== eye[2]);
+    if (scenario === 'near ground') assert.ok(eye[1]*r < ground+30);
+    await page.locator('#map-game').click();
+    const actual = await page.evaluate(() => terrainView.game.aimCamera());
+    const height = Math.max(ground+30, Math.min(eye[1]*r, ground+5000+1.65));
+    for (const [i, coordinate] of [x, height/r, z].entries()) {
+      assert.ok(Math.abs(actual.eye[i]-coordinate) < 1e-8, scenario+' eye '+i);
+      assert.ok(Math.abs(actual.forward[i]-forward[i]) < 1e-8, scenario+' direction '+i);
+    }
+    await page.locator('#game-exit').click();
+  }
   await close(page);
 });

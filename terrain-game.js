@@ -86,6 +86,19 @@ function gameFlightPlan(view, from, to) {
   return {from:[...from],to:[...to],lift,duration};
 }
 
+const WALK_MAX_HEIGHT = 5000; // metres from terrain to avatar feet
+
+// Orbit rendering and Walk share normalized terrain coordinates. Only the
+// playable boundary and flight ceiling can shorten the camera transfer.
+function walkCameraFromTerrain(view) {
+  const camera=terrainOrbitCamera(view);
+  const [x,y,z]=camera.eye;
+  const east=Math.max(-1,Math.min(1,x)), south=Math.max(-1,Math.min(1,z));
+  const ground=gameGround(view,east,south);
+  camera.eye=[east,Math.min(y,(ground+WALK_MAX_HEIGHT+1.65)/view.model.radius),south];
+  return camera;
+}
+
 class TerrainGame {
   constructor(view) {
     this.view=view;this.active=false;this.keys=new Set();this.pointers=new Map();
@@ -210,7 +223,7 @@ class TerrainGame {
       this.flying=true;this.velocityY=0;
     }
     if(this.flying) {
-      this.position[1]=Math.min((floor+5000)/radius,Math.max(floor/radius,this.position[1]+rise*speed*dt/radius));
+      this.position[1]=Math.min((floor+WALK_MAX_HEIGHT)/radius,Math.max(floor/radius,this.position[1]+rise*speed*dt/radius));
       if(rise<=0 && this.position[1]*radius<=floor+1e-6) {
         this.position[1]=floor/radius;this.flying=false;this.velocityY=0;
       }

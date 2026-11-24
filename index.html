@@ -1603,16 +1603,21 @@ function setMapView(view) {
   if (!["2d", "3d", "perspective", "game"].includes(view)) return;
   if ((view === "perspective" || view === "game") && !terrainData) return;
   if (view === 'game' && !S.pos) return;
-  // Keep Viewpoint position and aim; Walk always uses its own normal lens.
-  const walkCamera = view === 'game' && changingMode && mapView === 'perspective' && terrainView?.photoView
-    ? terrainPhotoCamera(terrainData, {...perspectiveSource(),
-        pitch:Math.max(-80,Math.min(80,terrainView.photoPitch+(terrainView.photoSource.sensorPitch || 0))),
-        fov:terrainView.photoFov}, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight)
-    : null;
+  // Capture the departing camera before restoring or resetting view state.
+  let walkCamera = null;
   if (view === 'game' && changingMode) {
-    const p=terrainPoint(terrainData,{lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,elev:0});
-    if(Math.max(Math.abs(p[0]),Math.abs(p[2]))>1) {
-      resetLocationOutput();pendingGame=true;mapHorizon();return;
+    if (mapView === '3d') {
+      walkCamera = walkCameraFromTerrain(terrainView);
+    } else {
+      const p=terrainPoint(terrainData,{lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,elev:0});
+      if(Math.max(Math.abs(p[0]),Math.abs(p[2]))>1) {
+        resetLocationOutput();pendingGame=true;mapHorizon();return;
+      }
+      if (mapView === 'perspective' && terrainView?.photoView) {
+        walkCamera = terrainPhotoCamera(terrainData, {...perspectiveSource(),
+          pitch:Math.max(-80,Math.min(80,terrainView.photoPitch+(terrainView.photoSource.sensorPitch || 0))),
+          fov:terrainView.photoFov}, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight);
+      }
     }
     gameReturnView=mapView;
   }
