@@ -1980,6 +1980,13 @@ function parseCoordinates(value) {
   return { latitude, longitude, altitude: null, accuracy: null, speed: null };
 }
 $("coordinate-input").oninput = clearDestinationSearch;
+$("coordinate-input").addEventListener("keydown", event => {
+  const input = event.currentTarget;
+  if (event.key !== "Tab" || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey || input.value.trim() || !input.placeholder) return;
+  input.value = input.placeholder;
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  // Keep ordinary Tab navigation: filling the suggestion does not submit it.
+});
 $("coordinate-form").onsubmit = async event => {
   event.preventDefault();
   clearDestinationSearch();

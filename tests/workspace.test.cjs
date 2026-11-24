@@ -2220,3 +2220,17 @@ test('standalone launch anchors dock to stable viewport before scrolling and aft
   assert.ok(await page.locator('#sidebar').isVisible());
   await close(page);
 });
+
+test('Tab accepts the current empty search placeholder without submitting or replacing text',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await page.locator('#gate-coordinates').click();
+  const input=page.locator('#coordinate-input');
+  await input.press('Tab');assert.equal(await input.inputValue(),'Mount Fuji');
+  assert.equal(await input.evaluate(el=>el===document.activeElement),false);
+  await input.fill('');await input.evaluate(el=>el.placeholder='Mount Rainier');
+  await input.press('Tab');assert.equal(await input.inputValue(),'Mount Rainier');
+  await input.fill('Kyoto');await input.press('Tab');assert.equal(await input.inputValue(),'Kyoto');
+  await input.fill('');await input.press('Shift+Tab');assert.equal(await input.inputValue(),'');
+  assert.equal(await page.evaluate(()=>!!HZ.P),false);
+  await close(page);
+});
