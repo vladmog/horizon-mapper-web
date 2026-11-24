@@ -148,7 +148,7 @@
     <button id="map-fullscreen" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">⛶</button>
   </div>
   <div id="map-utilities"><button id="map-fit" type="button" title="Fit view">Fit</button></div>
-  <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
+  <div id="mp-wrap"><div id="walk-patch-notice" hidden><span role="status" id="walk-patch-status"></span> <button id="walk-patch-cancel" type="button">Cancel</button></div><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
     <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
 <section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Search</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
     <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
@@ -1596,9 +1596,55 @@ try {
 let photoObserverHeight = 'ground', photoCustomHeight = 30;
 $("custom-height").value = photoCustomHeight;
 
-function setMapView(view) {
+let walkPatchRequest = null;
+function finishWalkPatch(message = "") {
+  if (walkPatchRequest) {
+    clearTimeout(walkPatchRequest.timer);
+    walkPatchRequest.worker.terminate();
+    walkPatchRequest = null;
+  }
+  $("walk-patch-notice").hidden = !message;
+  $("walk-patch-status").textContent = message;
+  $("walk-patch-cancel").hidden = true;
+}
+$("walk-patch-cancel").onclick = () => finishWalkPatch();
+
+function loadWalkPatch(camera) {
+  const original = terrainData;
+  const point = walkGeographicPoint(original, camera.eye);
+  if (!Number.isFinite(point.lat) || Math.abs(point.lat) > 80) {
+    finishWalkPatch("Walk terrain is available between 80° S and 80° N. Move the camera closer and try again.");
+    return;
+  }
+  const worker = new Worker(new URL("./terrain-worker.js", document.baseURI));
+  const request = {worker};
+  walkPatchRequest = request;
+  const fail = message => { if (walkPatchRequest === request) finishWalkPatch(message); };
+  request.timer = setTimeout(() => fail("Walk terrain timed out. Select Walk to retry."), 120000);
+  $("walk-patch-notice").hidden = $("walk-patch-cancel").hidden = false;
+  $("walk-patch-status").textContent = "Loading terrain at the camera…";
+  worker.onerror = () => fail("Could not load Walk terrain. Select Walk to retry.");
+  worker.onmessage = ({data}) => {
+    if (walkPatchRequest !== request) return;
+    if (data.type === "progress") {
+      $("walk-patch-status").textContent = `Loading terrain at the camera… ${data.data.done}/${data.data.total}`;
+    } else if (data.type === "failed") {
+      fail(data.data.error || "Could not load Walk terrain. Select Walk to retry.");
+    } else if (data.type === "terrain") {
+      finishWalkPatch();
+      if (mapView !== "3d" || terrainData !== original) return;
+      const model = data.data;
+      setMapView("game", {model, camera:{...camera, eye:terrainPoint(model, point)}});
+    }
+  };
+  worker.postMessage({type:"walk-terrain", options:{lat:point.lat, lon:point.lon, radius:Math.min(6000, original.radius)}});
+}
+
+function setMapView(view, patch = null) {
+  finishWalkPatch();
   const changingMode = view !== mapView;
-  const fitSelectedTerrain = changingMode && view === '3d' && HZ.selAz != null &&
+  const leavingWalkPatch = mapView === "game" && terrainView?.model !== terrainData;
+  const fitSelectedTerrain = !leavingWalkPatch && changingMode && view === '3d' && HZ.selAz != null &&
     (mapView === 'perspective' || mapView === 'game');
   if (!["2d", "3d", "perspective", "game"].includes(view)) return;
   if ((view === "perspective" || view === "game") && !terrainData) return;
@@ -1607,7 +1653,12 @@ function setMapView(view) {
   let walkCamera = null;
   if (view === 'game' && changingMode) {
     if (mapView === '3d') {
-      walkCamera = walkCameraFromTerrain(terrainView);
+      walkCamera = patch?.camera || terrainOrbitCamera(terrainView);
+      if (!patch && Math.max(Math.abs(walkCamera.eye[0]),Math.abs(walkCamera.eye[2])) > 1) {
+        try { loadWalkPatch(walkCamera); }
+        catch { finishWalkPatch("Could not start the Walk terrain request. Select Walk to retry."); }
+        return;
+      }
     } else {
       const p=terrainPoint(terrainData,{lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,elev:0});
       if(Math.max(Math.abs(p[0]),Math.abs(p[2]))>1) {
@@ -1621,7 +1672,10 @@ function setMapView(view) {
     }
     gameReturnView=mapView;
   }
-  if (mapView === 'game' && changingMode) terrainView?.game?.stop();
+  if (mapView === 'game' && changingMode) {
+    terrainView?.game?.stop();
+    if (leavingWalkPatch) terrainView.setModel(terrainData);
+  }
   if (changingMode && terrainView?.model && mapView !== '2d' && mapView !== 'game')
     terrainModeViews[mapView] = terrainView.captureView();
   if (view !== "2d") {
@@ -1659,14 +1713,21 @@ function setMapView(view) {
       else if (changingMode) terrainView.photoView = false;
       if (view === "3d") terrainView.photoView = false;
       if (view === 'game' && changingMode) {
+        if (patch) terrainView.setModel(patch.model);
         terrainView.game ||= new TerrainGame(terrainView);
+        terrainView.game.observerModel = terrainData;
         terrainView.game.onExit=()=>setMapView(gameReturnView);
         terrainView.game.speedMultiplier=Number($('game-speed').value);
-        terrainView.game.start({lat:S.pos.coords.latitude,lon:S.pos.coords.longitude},curCenter(),walkCamera);
+        terrainView.game.start({lat:S.pos.coords.latitude,lon:S.pos.coords.longitude},curCenter(),walkCamera,mapView === "3d");
       }
       if (view === "perspective") terrainView.setPhotoView(perspectiveSource());
       terrainView.dirty = true;
     } catch (error) {
+      if (patch) {
+        terrainView.setModel(terrainData);
+        terrainView.restoreView(terrainModeViews["3d"]);
+        finishWalkPatch("Could not open the Walk terrain. Select Walk to retry.");
+      }
       terrainError = error.message; $("sat-status").textContent = terrainError; return;
     }
   }
@@ -1743,7 +1804,7 @@ function drawTerrainView() {
       $('game-reticle').style.left=aimScreen.x+'%';$('game-reticle').style.top=aimScreen.y+'%';
       $('game-laser-status').style.left=(aimScreen.visible?Math.max(15,Math.min(85,aimScreen.x)):50)+'%';
       $('game-laser-status').style.top=aimScreen.visible?`calc(${Math.max(15,aimScreen.y)}% - 35px)`:'45%';
-      const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*terrainData.radius:0;
+      const distance=laserHit?Math.hypot(...laserHit.map((v,i)=>v-laser.camera.eye[i]))*game.view.model.radius:0;
       $('game-laser-status').textContent=laserHit?`Laser · ${distance<1000?Math.round(distance)+' m':miles(distance).toFixed(2)+' mi'}`:'No terrain hit — aim lower';
       const relative=game.relativeToStart(),height=Math.round(relative.height);
       const direction=relative.bearing===null?'':CARDINALS[Math.round(relative.bearing/22.5)%16];
@@ -1822,6 +1883,7 @@ function showPhotoPreview(file) {
 }
 // Switching origins must discard the previous sweep, including pending relief.
 function resetLocationOutput() {
+  finishWalkPatch();
   if(mapView === "game") setMapView("2d");
   pendingGame=false;
   for (const mode of Object.keys(terrainModeViews)) delete terrainModeViews[mode];
@@ -2007,6 +2069,8 @@ $("use-gps").onclick = () => {
 
 function mapHorizon() {
   if (!S.pos || HZ.loading) return;
+  finishWalkPatch();
+  if (mapView === "game" && terrainView?.model !== terrainData) setMapView("3d");
   window.HorizonUI?.showExplore();
   const c = observerRefreshView?.origin || S.pos.coords;
   if (es) { es.close(); es = null; }

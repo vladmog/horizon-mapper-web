@@ -1647,8 +1647,8 @@ test('every Walk entry starts airborne and both Fly to actions restore its terra
     assert.ok(start.height>=Math.max(30,height)-1e-6,`${source}/${view}: started at ${start.height} m instead of airborne`);
     assert.equal(start.flying,true);
     await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'spawn holds altitude');
-    // From the overhead Terrain camera a shallow ray overshoots the 2 km fixture.
-    await page.evaluate(view=>{terrainView.game.tilt=view==='3d' ? 1.4 : .4;},view);
+    // Aim almost straight down from the overhead Terrain camera on the 2 km fixture.
+    await page.evaluate(view=>{terrainView.game.tilt=view==='3d' ? Math.PI/2-.01 : .4;},view);
     await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
     await page.locator('#game-target').click();
     const selected=await page.evaluate(()=>terrainPoint(terrainData,HZ.pinnedTarget.point));
@@ -1717,14 +1717,13 @@ test('Terrain hands its rendered orbit eye and direction to Walk after navigatin
   const page = await pageFor({width: 1200, height: 800}, true);
   await mapCoordinates(page);
   await page.locator('[data-v="3d"]').click();
-  for (const scenario of ['inside', 'outside', 'near ground']) {
+  for (const scenario of ['inside', 'near ground']) {
     const expected = await page.evaluate(scenario => {
       const v = terrainView;
       v.resetCamera();
       v.zoom(.012);
       v.orbit(.8, -.24);
       v.pan(-140, 65);
-      if (scenario === 'outside') { v.zoom(80); v.pan(100000, -100000); }
       if (scenario === 'near ground') {
         v.zoom(.0001);
         v.focus[1] = gameGround(v, v.focus[0], v.focus[2]) / v.model.radius;
@@ -1742,16 +1741,99 @@ test('Terrain hands its rendered orbit eye and direction to Walk after navigatin
       assert.ok(Math.hypot(x,z) > .005 && Math.hypot(x-focus[0],z-focus[2]) > .005);
       assert.ok(eye[1]*r > ground+30 && eye[1]*r < ground+5000);
     }
-    if (scenario === 'outside') assert.ok(x !== eye[0] || z !== eye[2]);
     if (scenario === 'near ground') assert.ok(eye[1]*r < ground+30);
     await page.locator('#map-game').click();
     const actual = await page.evaluate(() => terrainView.game.aimCamera());
-    const height = Math.max(ground+30, Math.min(eye[1]*r, ground+5000+1.65));
+    const height = Math.max(ground+1.65, eye[1]*r);
     for (const [i, coordinate] of [x, height/r, z].entries()) {
       assert.ok(Math.abs(actual.eye[i]-coordinate) < 1e-8, scenario+' eye '+i);
       assert.ok(Math.abs(actual.forward[i]-forward[i]) < 1e-8, scenario+' direction '+i);
     }
     await page.locator('#game-exit').click();
   }
+  await close(page);
+});
+
+test('Walk loads each outside edge around the geographic eye and restores the observer terrain', async () => {
+  const page = await pageFor({width:1200,height:800}, true);
+  await mapCoordinates(page);
+  await page.locator('[data-v="3d"]').click();
+  await page.evaluate(() => {
+    // A 12 km observer patch requests a separate 6 km Walk patch.
+    terrainData={...terrainData,radius:12000,half:terrainData.half*6,patches:[]};
+    terrainView.setModel(terrainData);
+    window.originalTerrain=terrainData;
+    window.originalObserver=S.pos;
+    window.originalProfile=HZ.P;
+    HZ.selAz=12; HZ.pinnedTarget={bearing:12,point:{lat:48.86,lon:2.29,elev:80,dist:300,ang:1}};
+    window.originalTarget=HZ.pinnedTarget;
+    window.Worker=class {
+      postMessage({options}) { window.patchOptions=options; window.patchWorker=this; }
+      terminate() {this.terminated=true;}
+    };
+  });
+  for (const [x,z] of [[1.25,.2],[-1.25,.1],[.25,-1.35],[-.3,1.4],[1.2,-1.3]]) {
+    const elevated=x>1 && z<0;
+    const expected=await page.evaluate(([x,z])=>{
+      const v=terrainView;
+      v.resetCamera();v.orthographic=false;v.distance=.2;v.tilt=.25;v.yaw=.7;
+      const eye=terrainOrbitCamera(v).eye;
+      v.focus=[x-eye[0],8200/terrainData.radius+v.focus[1]-eye[1],z-eye[2]];
+      const size=256*2**terrainData.z;
+      const lon=(terrainData.cx+x*terrainData.half)/size*360-180;
+      const lat=Math.atan(Math.sinh(Math.PI*(1-2*(terrainData.cy+z*terrainData.half)/size)))*180/Math.PI;
+      return {lat,lon,forward:terrainOrbitCamera(v).forward,view:v.captureView()};
+    },[x,z]);
+    await page.locator('#map-game').click();
+    assert.equal(await page.locator('#walk-patch-cancel').isVisible(),true);
+    const options=await page.evaluate(()=>patchOptions);
+    assert.ok(Math.abs(options.lat-expected.lat)<1e-10 && Math.abs(options.lon-expected.lon)<1e-10);
+    assert.equal(options.radius,6000);
+    await page.evaluate(elevated=>{
+      const {lat,lon,radius}=patchOptions,model={...terrainData,lat0:lat,lon0:lon,radius};
+      model.half=terrainData.half*(radius/terrainData.radius)*Math.cos(terrainData.lat0*Math.PI/180)/Math.cos(lat*Math.PI/180);
+      model.heights=terrainData.heights.map(()=>900);
+      model.patches=[{radius:radius/2,heights:model.heights.map(()=>elevated?8500:1200)}];
+      const size=256*2**model.z;
+      model.cx=(lon+180)/360*size;
+      model.cy=(1-Math.asinh(Math.tan(lat*Math.PI/180))/Math.PI)*size/2;
+      patchWorker.onmessage({data:{type:'terrain',data:model}});
+    },elevated);
+    const result=await page.evaluate(()=>{
+      const g=terrainView.game;
+      const before=walkGeographicPoint(g.view.model,g.aimCamera().eye);
+      const aim=g.aimCamera().forward;
+      const elevation=gameGround(g.view,g.position[0],g.position[2]);
+      g.keys.add('w');g.step(.05);g.keys.clear();
+      const after=walkGeographicPoint(g.view.model,g.aimCamera().eye);
+      const hit=gameTarget(g,HZ.P.hObs,HZ.P.k,[0,0,0]);
+      return {before,after,aim,elevation,dist:hit.point.dist};
+    });
+    assert.ok(Math.abs(result.before.lat-expected.lat)<1e-8 && Math.abs(result.before.lon-expected.lon)<1e-8);
+    const altitude=elevated ? result.elevation+1.65 : 8200;
+    assert.ok(Math.abs(result.elevation-(elevated?8500:1200))<.01);
+    assert.ok(Math.abs(result.before.elev-altitude)<1e-6 && Math.abs(result.after.elev-altitude)<1e-6);
+    assert.notEqual(result.before.lat,result.after.lat);
+    assert.ok(result.dist>1000,'marked coordinates measure from original observer');
+    result.aim.forEach((v,i)=>assert.ok(Math.abs(v-expected.forward[i])<1e-9));
+    await page.locator('#game-exit').click();
+    assert.deepEqual(await page.evaluate(()=>terrainView.captureView()),expected.view);
+    assert.ok(await page.evaluate(()=>mapView==='3d' && terrainView.model===originalTerrain &&
+      terrainData===originalTerrain && S.pos===originalObserver && HZ.P===originalProfile && HZ.pinnedTarget===originalTarget));
+  }
+  await page.evaluate(()=>{terrainView.focus[0]=3;});
+  await page.locator('#map-game').click();
+  await page.locator('#walk-patch-cancel').click();
+  assert.ok(await page.evaluate(()=>patchWorker.terminated));
+  await page.evaluate(()=>patchWorker.onmessage({data:{type:'terrain',data:terrainData}}));
+  assert.equal(await page.evaluate(()=>mapView),'3d');
+  await page.locator('#map-game').click();
+  await page.evaluate(()=>patchWorker.onmessage({data:{type:'failed',data:{error:'Tiles unavailable'}}}));
+  assert.match(await page.locator('#walk-patch-status').innerText(),/unavailable/);
+  assert.ok(await page.evaluate(()=>terrainView.model===originalTerrain && mapView==='3d'));
+  await page.evaluate(()=>{terrainView.focus[2]=1e7;window.patchWorker=null;});
+  await page.locator('#map-game').click();
+  assert.match(await page.locator('#walk-patch-status').innerText(),/80°/);
+  assert.equal(await page.evaluate(()=>window.patchWorker),null);
   await close(page);
 });

@@ -21,7 +21,9 @@ function gameGround(view, x, z) {
 // The ray is linear between grid edges and triangle diagonals. Splitting at
 // every crossing finds the first surface hit without stepping over thin ridges.
 function gameRaycast(view, origin, direction) {
-  let end=4;
+  // A high Terrain camera can look straight down from beyond four radii.
+  // Stop at the horizontal edge or below the mesh (all its heights are >= 0).
+  let end=direction[1]<0 ? Math.max(4,-origin[1]/direction[1]+.01) : 4;
   for(const axis of [0,2]) {
     if(Math.abs(origin[axis])>1)return null;
     if(Math.abs(direction[axis])>1e-12)
@@ -88,32 +90,23 @@ function gameFlightPlan(view, from, to) {
 
 const WALK_MAX_HEIGHT = 5000; // metres from terrain to avatar feet
 
-// Orbit rendering and Walk share normalized terrain coordinates. Only the
-// playable boundary and flight ceiling can shorten the camera transfer.
-function walkCameraFromTerrain(view) {
-  const camera=terrainOrbitCamera(view);
-  const [x,y,z]=camera.eye;
-  const east=Math.max(-1,Math.min(1,x)), south=Math.max(-1,Math.min(1,z));
-  const ground=gameGround(view,east,south);
-  camera.eye=[east,Math.min(y,(ground+WALK_MAX_HEIGHT+1.65)/view.model.radius),south];
-  return camera;
-}
-
 class TerrainGame {
   constructor(view) {
     this.view=view;this.active=false;this.keys=new Set();this.pointers=new Map();
     this.thirdPerson=false;this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=25;
     this.bind();
   }
-  start(position, bearing=0, camera=null) {
+  start(position, bearing=0, camera=null, fromTerrain=false) {
     const point=camera ? camera.eye : terrainPoint(this.view.model,{...position,elev:0});
     const ground=gameGround(this.view,point[0],point[2]);
     if(ground===null) throw new Error('Map the current location before starting Game.');
     const radius=this.view.model.radius;
-    // Every entry route starts airborne, including Map/Terrain and photos
+    // Map and Viewpoint start airborne, including photos
     // whose Viewpoint is at ground level. Preserve a higher Viewpoint eye,
     // but keep at least the default 30 m eye clearance. Physics tracks feet.
-    const eyeAltitude=Math.max(ground+30,camera ? camera.eye[1]*radius : ground+30);
+    const minimumEye=fromTerrain ? 1.65 : 30;
+    const eyeAltitude=Math.max(ground+minimumEye,camera ? camera.eye[1]*radius : ground+30);
+    this.fromTerrain=fromTerrain;
     this.position=[point[0],(eyeAltitude-1.65)/radius,point[2]];
     this.yaw=camera ? Math.atan2(-camera.forward[0],-camera.forward[2]) : -bearing*Math.PI/180;
     this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
@@ -125,7 +118,7 @@ class TerrainGame {
     window.getSelection?.()?.removeAllRanges();
     this.flight=null;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
   }
-  stop() { this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
+  stop() { this.observerModel=null;this.flight=null;this.active=false;this.clearInput();this.lastTime=null; }
   clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.();this.resetLook?.(); }
   relativeToStart() {
     const radius=this.view.model.radius;
@@ -223,7 +216,7 @@ class TerrainGame {
       this.flying=true;this.velocityY=0;
     }
     if(this.flying) {
-      this.position[1]=Math.min((floor+WALK_MAX_HEIGHT)/radius,Math.max(floor/radius,this.position[1]+rise*speed*dt/radius));
+      this.position[1]=Math.min(this.fromTerrain ? Infinity : (floor+WALK_MAX_HEIGHT)/radius,Math.max(floor/radius,this.position[1]+rise*speed*dt/radius));
       if(rise<=0 && this.position[1]*radius<=floor+1e-6) {
         this.position[1]=floor/radius;this.flying=false;this.velocityY=0;
       }
@@ -555,18 +548,24 @@ function gameAvatar(game, radius) {
   return new Float32Array(vertices);
 }
 
-function gameTarget(game, observerAltitude, refraction=.13, position=game.position) {
-  const model=game.view.model,size=256*2**model.z;
+function walkGeographicPoint(model, position) {
+  const size=256*2**model.z;
   const lat=180/Math.PI*Math.atan(Math.sinh(Math.PI*(1-2*(model.cy+position[2]*model.half)/size)));
   const lon=(((model.cx+position[0]*model.half)/size*360)%360+360)%360-180;
+  return {lat,lon,elev:position[1]*model.radius};
+}
+
+function gameTarget(game, observerAltitude, refraction=.13, position=game.position) {
+  const {lat,lon,elev}=walkGeographicPoint(game.view.model,position);
+  const model=game.observerModel || game.view.model,size=256*2**model.z;
   const lat0=model.lat0 ?? 180/Math.PI*Math.atan(Math.sinh(Math.PI*(1-2*model.cy/size)));
   const lon0=model.lon0 ?? model.cx/size*360-180;
   const rad=Math.PI/180,a=lat0*rad,b=lat*rad,delta=(lon-lon0)*rad;
   const h=Math.sin((b-a)/2)**2+Math.cos(a)*Math.cos(b)*Math.sin(delta/2)**2;
-  const dist=2*6371008.8*Math.asin(Math.min(1,Math.sqrt(h))),elev=position[1]*model.radius;
+  const dist=2*6371008.8*Math.asin(Math.min(1,Math.sqrt(h)));
   const bearing=(Math.atan2(Math.sin(delta)*Math.cos(b),Math.cos(a)*Math.sin(b)-Math.sin(a)*Math.cos(b)*Math.cos(delta))/rad+360)%360;
   const drop=dist*dist*(1-refraction)/(2*6371008.8);
-  return {bearing,point:{lat,lon,dist,elev,ang:Math.atan2(elev-observerAltitude-drop,dist)/rad,z:model.z}};
+  return {bearing,point:{lat,lon,dist,elev,ang:Math.atan2(elev-observerAltitude-drop,dist)/rad,z:game.view.model.z}};
 }
 if(typeof module!=='undefined')module.exports={gameRaycast,gameGround,gameFlightPlan,gameLaserTool,gameLaserFrame,gameAvatar,gameTarget,TerrainGame};
 

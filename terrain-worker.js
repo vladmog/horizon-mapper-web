@@ -221,7 +221,7 @@ function resolveObserver(ground, eye, photoAltitude) {
   return { altitude: Math.max(floor, photoAltitude), source: photoAltitude < floor ? "ground-clamped" : "photo" };
 }
 
-async function computeProfile(options) {
+async function computeProfile(options, terrainOnly=false) {
   const lat = Number(options.lat), lon = Number(options.lon);
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 80)
     throw new Error("Latitude must be within +/-80 degrees.");
@@ -246,6 +246,10 @@ async function computeProfile(options) {
     } });
     mosaics.push(Object.assign(mosaic, { rIn: tier.rIn, rOut: tier.rOut }));
   }
+  if (terrainOnly) {
+    if (mosaics.some(m => m.failed)) throw new Error("Some Walk terrain tiles could not be loaded. Try again.");
+    return {terrain:buildTerrainModel(mosaics, {lat,lon,radius})};
+  }
   const tileMs = performance.now() - started;
   const ground = mosaics[0].sample(lat, lon);
   const baseGround = Number.isFinite(Number(options.groundOverride)) ? Number(options.groundOverride) : ground;
@@ -266,13 +270,16 @@ async function computeProfile(options) {
 }
 
 self.onmessage = async event => {
-  if (event.data?.type !== "compute") return;
+  const terrainOnly=event.data?.type === "walk-terrain";
+  if (!terrainOnly && event.data?.type !== "compute") return;
   try {
-    const result = await computeProfile(event.data.options || {});
-    postMessage({ type: "result", data: result.profile });
+    const result = await computeProfile(event.data.options || {}, terrainOnly);
+    // The Walk caller releases its worker as soon as the mesh arrives.
+    if (terrainOnly) await trimCache().catch(() => {});
+    else postMessage({ type: "result", data: result.profile });
     postMessage({ type: "terrain", data: result.terrain });
     postMessage({ type: "complete" });
-    trimCache().catch(() => {});
+    if (!terrainOnly) trimCache().catch(() => {});
   } catch (error) {
     postMessage({ type: "failed", data: { error: error?.message || String(error) } });
   }

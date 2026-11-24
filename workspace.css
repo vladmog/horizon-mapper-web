@@ -2176,3 +2176,15 @@ body.has-location #sat-retry { flex: none; min-height: 36px; padding: 5px; font-
 .search-links { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
 .search-links a { padding: 5px 0; }
 @media (orientation: landscape) { #game-search-card { width: min(290px, calc(50% - 54px)); max-height: calc(100dvh - 208px); } }
+
+#walk-patch-notice {
+  position: absolute;
+  z-index: 6;
+  left: 8px;
+  right: 8px;
+  top: calc(var(--map-controls-top) + var(--map-controls-height) + 12px);
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--overlay);
+  font-size: 13px;
+}
