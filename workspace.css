@@ -822,12 +822,12 @@ details > p {
   line-height: 1.6;
 }
 .welcome-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: auto auto;
+  width: fit-content;
   gap: 7px;
   margin: 24px auto 14px;
-  max-width: 410px;
+  max-width: 100%;
 }
 .welcome-actions button {
   font-size: 12px;
@@ -835,9 +835,7 @@ details > p {
   border-color: var(--line);
 }
 .welcome-actions .primary {
-  flex-basis: 100%;
-  max-width: 290px;
-  margin-inline: 50px;
+  grid-column: 1 / -1;
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
@@ -1574,10 +1572,6 @@ body.game-mode #view-compass {
   .welcome-actions {
     margin-top: 20px;
   }
-  .welcome-actions .primary {
-    margin-inline: 20px;
-    max-width: 100%;
-  }
   #gate {
     padding: 16px;
   }
@@ -1722,12 +1716,6 @@ body.game-mode #view-compass {
   }
   .welcome-actions {
     margin-block: 12px 8px;
-    max-width: none;
-    flex-wrap: nowrap;
-  }
-  .welcome-actions .primary {
-    margin: 0;
-    flex-basis: auto;
   }
   .welcome-note {
     display: none;
