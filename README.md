@@ -100,3 +100,10 @@ Validation: `tests/place-search.test.cjs` covers ranking, address fallback, and 
 `tests/workspace.test.cjs` covers explicit-only requests, captured coordinates,
 caching, failures, dismissal races, and mobile layout. Those tests use controlled
 API responses; live service checks are separate.
+
+## Publishing an app update
+
+Increment the integer `HORIZON_RELEASE` in `pwa.js` whenever preparing a changed
+app for preview or publication. The same value identifies the installed offline
+cache and appears at the bottom of Settings. Publish the tested preview with its
+existing number. The Pages workflow checks for an increase when app assets change.

@@ -23,6 +23,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Check app release number
+        env:
+          PREVIOUS_MAIN: ${{ github.event.before }}
+        run: |
+          assets=('*.html' '*.js' '*.css' '*.webmanifest' '*.webp' 'icons/**' 'vendor/**')
+          base="$PREVIOUS_MAIN"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            last_change=$(git log -1 --first-parent --format=%H -- "${assets[@]}")
+            base="$last_change^"
+          fi
+          if ! git diff --quiet "$base" HEAD -- "${assets[@]}"; then
+            current=$(sed -nE 's/^const HORIZON_RELEASE = ([0-9]+);$/\1/p' pwa.js)
+            previous=$(git show "${base}:pwa.js" | sed -nE 's/^const HORIZON_RELEASE = ([0-9]+);$/\1/p')
+            # Support the release before the shared version number was introduced.
+            if [[ -z "$previous" ]]; then
+              previous=$(git show "${base}:service-worker.js" | sed -nE 's/^const CACHE = "horizon-mapper-workspace-v([0-9]+)";$/\1/p')
+            fi
+            if ! [[ "$current" =~ ^[0-9]+$ && "$previous" =~ ^[0-9]+$ && "$current" -gt "$previous" ]]; then
+              echo "::error::Increase HORIZON_RELEASE in pwa.js before publishing app changes."
+              exit 1
+            fi
+          fi
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
