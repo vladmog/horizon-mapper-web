@@ -153,8 +153,10 @@
           ? "Terrain loaded"
           : S.pos
             ? "Location ready"
-            : "No location selected";
+            : "";
+    $("header-location").hidden = !S.pos;
     if (status !== lastStatus) {
+      $("header-context").hidden = !status;
       $("workspace-state").textContent = status;
       lastStatus = status;
     }
