@@ -120,7 +120,7 @@ async function noOverflow(page) {
   assert.ok(overflow.scroll <= overflow.width + 1, JSON.stringify(overflow));
 }
 async function openSettings(page) {
-  await page.locator(page.viewportSize().width<=900?'[data-mobile-panel="settings"]':'[data-panel="settings"]').click();
+  await page.locator('[data-mobile-panel="settings"]').click();
 }
 async function assertDefaultStart(page) {
   const state=await page.evaluate(()=>{
@@ -164,28 +164,20 @@ test("responsive startup and every tools panel fit 320px through desktop, withou
     assert.equal(await page.locator("#card-horizon").isVisible(), false);
     const dock = page.locator(".mobile-dock"), initialDock = await dock.boundingBox();
     for (const panel of ["location", "project", "settings"]) {
-      if (width <= 900)
-        await page.locator(`[data-mobile-panel="${panel}"]`).click();
-      else await page.locator(`[data-panel="${panel}"]`).click();
+      await page.locator(`[data-mobile-panel="${panel}"]`).click();
       assert.equal(await page.locator(`#panel-${panel}`).isVisible(), true);
       await noOverflow(page);
       const panelBounds = await page.locator("#sidebar").boundingBox();
       assert.ok(
         panelBounds.x >= 0 && panelBounds.x + panelBounds.width <= width + 1,
       );
-      if (width <= 900) {
-        assert.equal(await page.locator(".panel-tabs").isVisible(),false);
-        assert.deepEqual(await dock.boundingBox(),initialDock);
-        assert.ok(panelBounds.y+panelBounds.height<=initialDock.y);
-        assert.equal(await dock.locator('[aria-pressed="true"]').getAttribute("data-mobile-panel"),panel);
-
-      }
-    }
-    if (width <= 900) {
-      await dock.locator('[data-mobile-panel="explore"]').click();
-      assert.equal(await page.locator("#sidebar").isVisible(), false);
       assert.deepEqual(await dock.boundingBox(),initialDock);
+      assert.ok(panelBounds.y+panelBounds.height<=initialDock.y);
+      assert.equal(await dock.locator('[aria-pressed="true"]').getAttribute("data-mobile-panel"),panel);
     }
+    await dock.locator('[data-mobile-panel="explore"]').click();
+    assert.equal(await page.locator("#sidebar").isVisible(), false);
+    assert.deepEqual(await dock.boundingBox(),initialDock);
     await close(page);
   }
 });
@@ -386,9 +378,7 @@ test("photo upload, project saving, reopening, GPX and map provider controls rem
       document.querySelectorAll("#asset-list .asset-row").length === 2 &&
       !document.getElementById("asset-add").disabled,
   );
-  if (!(await page.locator("#sidebar").isVisible()))
-    await page.locator('[data-mobile-panel="settings"]').click();
-  else await page.locator('[data-panel="settings"]').click();
+  await openSettings(page);
   await page.locator('[data-a="google"]').click();
   assert.equal(
     await page.locator("#r-maps").textContent(),
@@ -904,12 +894,13 @@ test('third-person reticle tracks the laser impact instead of the character head
 async function assertSplit(page,photo=false) {
   const a=await page.locator(photo?'#mp3d':'#mp').boundingBox();
   const b=await page.locator(photo?'#photo-viewport':'#hz').boundingBox();
-  const viewport=page.viewportSize(),landscape=viewport.width>viewport.height;
-  const bottom=viewport.width<=900?(await page.locator('.mobile-dock').boundingBox()).y:viewport.height;
+  const viewport=page.viewportSize(),landscape=viewport.width>900 || viewport.width>viewport.height;
+  const bottom=(await page.locator('.mobile-dock').boundingBox()).y;
   for(const rect of [a,b]) {
     assert.ok(rect.x>=0 && rect.y>=0 && rect.x+rect.width<=viewport.width+1 && rect.y+rect.height<=bottom+1,JSON.stringify({a,b,bottom}));
   }
   assert.ok(Math.abs(a.width*a.height-b.width*b.height)<Math.max(a.width,b.width)*2,JSON.stringify({a,b}));
+  if(viewport.width>900) assert.ok(a.width+b.width>=viewport.width-3, "desktop panes share the full workspace width");
   if(landscape){assert.ok(Math.abs(a.y-b.y)<1);assert.ok(Math.abs(a.x+a.width+2-b.x)<1);}
   else{assert.ok(Math.abs(a.x-b.x)<1);assert.ok(Math.abs(a.y+a.height+2-b.y)<1);}
   await noOverflow(page);
@@ -927,7 +918,7 @@ test('loaded location uses two equal visible panes with accessible overlay contr
     await openSettings(page);
     assert.equal(await page.locator('#hz-range').isVisible(),true);
     await page.locator('#mp-zoom [data-k="4"]').click();
-    if(size.width<=900)await page.locator('#panel-close').click();
+    await page.locator('#panel-close').click();
     await page.locator('#map-fit').click();assert.equal(await page.evaluate(()=>MP.zoom),0);
     await page.locator('#map-fullscreen').click();
     const full=await page.locator('#mp').boundingBox();assert.ok(full.height>=size.height-1);
@@ -948,7 +939,7 @@ test('photo opens beside an equal Viewpoint pane, with optional horizon and phot
   });
   await page.locator('#photo-file').setInputFiles({name:'comparison-test.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
   await page.waitForFunction(()=>S.locationSource==='photo' && HZ.P && !HZ.loading && mapView==='perspective' && document.getElementById('photo-preview').naturalWidth>0);
-  for(const size of [{width:390,height:844},{width:844,height:390},{width:320,height:568}]) {
+  for(const size of [{width:1440,height:900},{width:390,height:844},{width:844,height:390},{width:320,height:568}]) {
     await page.setViewportSize(size);await assertSplit(page,true);
     assert.equal(await page.locator('#hz').isVisible(),false);
     await page.waitForTimeout(150);await page.screenshot({path:`/tmp/horizon-split-photo-${size.width}.png`});
@@ -1251,10 +1242,10 @@ test('dark workspace stays readable across device theme changes without losing t
     await checkContrast(['#map-view button.on','#map-fullscreen','#map-fit']);
     await page.locator('#map-fullscreen').click();
     for(const panel of ['location','project','settings']) {
-      await page.locator(size.width<=900?`[data-mobile-panel="${panel}"]`:`[data-panel="${panel}"]`).click();
-      await checkContrast([size.width<=900?'.mobile-dock [aria-pressed="true"]':'.panel-tabs button.active',`#panel-${panel} .section-heading h2`]);
+      await page.locator(`[data-mobile-panel="${panel}"]`).click();
+      await checkContrast(['.mobile-dock [aria-pressed="true"]',`#panel-${panel} .section-heading h2`]);
       if(panel==='settings')await page.screenshot({path:`/tmp/horizon-dark-settings-${size.width}.png`});
-      if(size.width<=900)await page.locator('#panel-close').click();
+      await page.locator('#panel-close').click();
     }
     for(const scheme of ['light','dark','light']) {
       await page.emulateMedia({colorScheme:scheme});
@@ -1883,6 +1874,7 @@ test('Terrain Walk keeps the active Search marker as Start across new searches',
   await mapCoordinates(page);
   for(const [lat,lon] of [[48.8584,2.2945],[48.86,2.30]]) {
     if(lat===48.86) {
+      await page.locator('[data-mobile-panel="location"]').click();
       await page.locator('#coordinate-pick').click();
       await page.locator('#coordinate-input').fill(lat+', '+lon);
       await page.locator('#coordinate-input').press('Enter');
@@ -1903,6 +1895,7 @@ test('Terrain Walk keeps the active Search marker as Start across new searches',
     await assertDefaultStart(page);
     await page.locator('#game-exit').click();
   }
+  await page.locator('[data-mobile-panel="location"]').click();
   await page.locator('#use-gps').click();
   await page.waitForFunction(()=>window.__gpsRequests>0);
   await page.evaluate(()=>window.__gpsSuccess({coords:{latitude:48.859,longitude:2.295,accuracy:5},timestamp:Date.now()}));

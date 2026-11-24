@@ -1,7 +1,6 @@
 "use strict";
 // Presentation only: geographic state and all map operations stay in the app.
 (() => {
-  const mobile = matchMedia("(max-width: 900px)");
   const sidebar = $("sidebar");
   const layout = sidebar.closest(".app-layout");
   const dock = layout.querySelector(".mobile-dock");
@@ -26,8 +25,7 @@
       ),
     ].filter((el) => el.getClientRects().length && !el.closest("[hidden],[inert]"));
   }
-  function setOverlay(open) {
-    const active = open && mobile.matches;
+  function setOverlay(active) {
     document.body.classList.toggle("panel-open", active);
     $("panel-backdrop").hidden = !active;
     $("workspace").inert = active;
@@ -58,17 +56,11 @@
     currentPanel = name;
     for (const el of document.querySelectorAll("[data-tool-panel]"))
       el.hidden = el.dataset.toolPanel !== name;
-    for (const b of document.querySelectorAll("[data-panel]")) {
-      b.classList.toggle("active", b.dataset.panel === name);
-      b.setAttribute("aria-pressed", String(b.dataset.panel === name));
-    }
     setOverlay(true);
-    if (mobile.matches) {
-      sidebar.scrollTop = 0;
-      const heading = $(`panel-${name}`).querySelector("h2");
-      heading.tabIndex = -1;
-      heading.focus({preventScroll:true});
-    }
+    sidebar.scrollTop = 0;
+    const heading = $(`panel-${name}`).querySelector("h2");
+    heading.tabIndex = -1;
+    heading.focus({preventScroll:true});
   }
   function showExplore(event) {
     clearDestinationSearch();
@@ -83,8 +75,6 @@
     if(S.pos)window.scrollTo({top:0,behavior:'instant'});
     MP.dirty = true;
   }
-  for (const b of document.querySelectorAll("[data-panel]"))
-    b.addEventListener("click", () => showPanel(b.dataset.panel));
   for (const b of document.querySelectorAll("[data-mobile-panel]"))
     b.addEventListener("click", (event) =>
       b.dataset.mobilePanel === "explore"
@@ -95,7 +85,7 @@
   $("panel-backdrop").onclick = showExplore;
   $("header-location").onclick = () => showPanel("location");
   document.addEventListener("keydown", (event) => {
-    if (!mobile.matches || !document.body.classList.contains("panel-open"))
+    if (!document.body.classList.contains("panel-open"))
       return;
     if (event.key === "Escape") {
       event.preventDefault();
@@ -123,7 +113,6 @@
       }
     }
   });
-  mobile.addEventListener("change", () => setOverlay(false));
   function updateComparison() {
     const photo=document.body.classList.contains('photo-mode');
     const showPhoto=photo && !document.body.classList.contains('compare-horizon');
