@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE = "horizon-mapper-workspace-v53";
+const CACHE = "horizon-mapper-workspace-v54";
 const SHELL = [
   "./", "./index.html", "./workspace.css", "./welcome-ridgeline.webp", "./workspace.js", "./manifest.webmanifest", "./privacy.html",
   "./browser-profile.js", "./terrain-worker.js", "./horizon-core.js", "./pwa.js",
@@ -29,8 +29,28 @@ self.addEventListener("activate", event => {
     .then(() => self.clients.claim()));
 });
 
+// The large desktop artwork is cached only on displays that request it.
+const wideHero = new URL("./welcome-ridgeline-wide.webp", self.registration.scope).href;
+async function desktopHero() {
+  const cache = await caches.open(CACHE);
+  const saved = await cache.match(wideHero);
+  if (saved) return saved;
+  try {
+    const response = await fetch(wideHero);
+    if (response.ok) {
+      try { await cache.put(wideHero, response.clone()); } catch { /* Still display the online image if storage is full. */ }
+      return response;
+    }
+  } catch { /* Offline: the standard artwork is in the shell. */ }
+  return await cache.match(new URL("./welcome-ridgeline.webp", self.registration.scope).href) || Response.error();
+}
+
 self.addEventListener("fetch", event => {
   const url=new URL(event.request.url),asset=shellURLs.get(url.pathname);
+  if(event.request.method==="GET" && url.href===wideHero) {
+    event.respondWith(desktopHero());
+    return;
+  }
   if(event.request.method!=="GET" || url.origin!==location.origin || !asset)return;
   event.respondWith(caches.match(asset,{cacheName:CACHE}).then(cached=>{
     if(cached)return cached;

@@ -2214,8 +2214,10 @@ body:not(.has-location) #mp { height: max(460px,calc(100dvh - 54px)); }
   place-items: stretch; padding: 0;
   background: var(--bg);
 }
-#gate::before {
-  content: ""; background: #222 url("./welcome-ridgeline.webp") center 42% / cover no-repeat;
+.welcome-landscape { position: relative; overflow: hidden; background: #222; }
+.welcome-landscape img {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 42%;
 }
 .welcome-content {
   width: 100%; padding: 20px 12px; background: var(--bg);
