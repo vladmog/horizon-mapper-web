@@ -1378,6 +1378,15 @@ test('first-person gun surfaces occlude correctly regardless of triangle submiss
   await close(page);
 });
 
+async function assertArrivalFaces(page, source) {
+  const dot=await page.evaluate(source=>{
+    const g=terrainView.game,c=g.aimCamera();
+    const marker=source ? {...g.startMarker,elev:g.startMarker.elev-WALK_DEFAULT_FEET_CLEARANCE} : readoutTarget().point;
+    const ray=terrainPoint(g.view.model,marker).map((v,i)=>v-c.eye[i]);
+    return ray.reduce((sum,v,i)=>sum+v*c.forward[i],0)/Math.hypot(...ray);
+  },source);
+  assert.ok(dot>1-1e-9, 'arrival eye faces the geographic marker');
+}
 test('Fly to Target arrives at default height across hills and Start returns to the source at default height',async()=>{
   const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
   await page.locator('[data-v="perspective"]').click();await page.locator('#map-game').click();
@@ -1399,6 +1408,7 @@ test('Fly to Target arrives at default height across hills and Start returns to 
   });
   assert.ok(Math.abs(await height()-30)<1e-6);
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
+  await assertArrivalFaces(page,true);
   assert.deepEqual(await page.evaluate(()=>HZ.pinnedTarget.point),target);
   await page.waitForTimeout(200);assert.ok(Math.abs(await height()-30)<1e-6);
   const hills=await page.evaluate(()=>{
@@ -1430,7 +1440,25 @@ test('Fly to Target arrives at default height across hills and Start returns to 
   await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
   assert.ok(Math.abs(await height()-30)<1e-6);
   await assertDefaultStart(page);
+  await assertArrivalFaces(page,false);
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
+  // A distant high marker is above the arrival eye. A coincident
+  // horizontal location has no bearing and falls back to the entry pose.
+  await page.evaluate(()=>{
+    const g=terrainView.game,m=g.view.model;
+    const point=walkGeographicPoint(m,[.7,g.position[1]+.3,-.4]);
+    HZ.selAz=20;HZ.pinnedTarget={bearing:20,point:{...readoutTarget().point,...point}};
+    g.lookBy(80,30);
+  });
+  await page.locator('#game-respawn').click();await assertArrivalFaces(page,false);
+  const coincident=await page.evaluate(()=>{
+    const g=terrainView.game;
+    Object.assign(HZ.pinnedTarget.point,{lat:g.startMarker.lat,lon:g.startMarker.lon});
+    g.reset();
+    return {yaw:g.yaw,tilt:g.tilt,entry:g.startAim};
+  });
+  assert.equal(coincident.yaw,coincident.entry.yaw);
+  assert.equal(coincident.tilt,coincident.entry.tilt);
   // A fresh session started from Map must also start and arrive airborne.
   await page.locator('#game-exit').click();await page.locator('[data-v="2d"]').click();await page.locator('#map-game').click();
   await page.waitForFunction(()=>terrainView.game.active && !document.getElementById('game-target').disabled);
@@ -1846,6 +1874,13 @@ test('Walk loads each outside edge around the geographic eye and restores the ob
       assert.ok(Math.abs(landed.lat-48.8584)<1e-8 && Math.abs(landed.lon-2.2945)<1e-8);
       assert.equal(await page.evaluate(()=>terrainView.game.relativeToStart().distance),0);
       await assertDefaultStart(page);
+      await assertArrivalFaces(page,false);
+      await page.evaluate(()=>{clearSelection();terrainView.game.lookBy(80,40);});
+      await page.locator('#game-respawn').click();
+      const restored=await page.evaluate(()=>terrainView.game.aimCamera().forward);
+      restored.forEach((v,i)=>assert.ok(Math.abs(v-expected.forward[i])<1e-9));
+      await page.evaluate(()=>{HZ.pinnedTarget=originalTarget;HZ.selAz=originalTarget.bearing;});
+
     }
     await page.locator('#game-exit').click();
     assert.deepEqual(await page.evaluate(()=>terrainView.captureView()),expected.view);
@@ -1937,6 +1972,17 @@ test('top-down Terrain enters Walk over the same footprint before the first orbi
       assert.ok(Math.abs(Math.min(pose.w/frame.w,pose.h/frame.h)-1)<1e-5);
       await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
       await assertDefaultStart(page);
+      const fallback=await page.evaluate(()=>{
+        const g=terrainView.game;
+        clearSelection();g.lookBy(85,-40);g.reset();
+        while(g.flight)g.advanceFlight(.05);
+        const recovered=g.aimCamera().forward;
+        g.lookBy(0,-30);g.step(1/60);
+        return {recovered,manual:g.aimCamera().forward};
+      });
+      fallback.recovered.forEach((v,i)=>assert.ok(Math.abs(v-pose.forward[i])<1e-9));
+      assert.notDeepEqual(fallback.manual,fallback.recovered);
+
       await page.locator('#game-exit').click();
       await page.locator('[data-v="2d"]').click();
     }

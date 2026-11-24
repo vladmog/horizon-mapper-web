@@ -1738,6 +1738,10 @@ function setMapView(view, patch = null) {
           : walkGeographicPoint(terrainData,[0,gameGround(terrainView,0,0)/terrainData.radius,0]);
         if (patch) terrainView.setModel(patch.model);
         terrainView.game ||= new TerrainGame(terrainView);
+        terrainView.game.getSelectedPoint = () => {
+          const target = readoutTarget();
+          return target?.selected ? target.point : null;
+        };
         terrainView.game.observerModel = terrainData;
         terrainView.game.startedOnPatch = !!patch;
         terrainView.game.onExit=()=>setMapView(gameReturnView);

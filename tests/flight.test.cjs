@@ -164,3 +164,20 @@ test('first-person hands keep their shape while moving far from the map origin',
   assert.equal(world.length,local.length);
   assert.ok(world.every(Number.isFinite) && local.every(Number.isFinite));
 });
+
+test('return flight turns the short way across north/south wrap and restores entry tilt',()=>{
+  const g=walker(terrain(()=>0),.5);
+  g.spawn=[0,0,0];g.yaw=Math.PI-.03;g.tilt=-.31;
+  g.startAim={yaw:-Math.PI+.04,tilt:.65};
+  assert.ok(g.reset());
+  const initial=g.yaw;
+  g.advanceFlight(g.flight.duration/2);
+  assert.ok(g.yaw>initial && g.yaw-initial<.07);
+  g.lookBy(18,-9);
+  g.advanceFlight(g.flight.duration);
+  assert.ok(Math.abs(Math.sin(g.yaw-g.startAim.yaw))<1e-9);
+  assert.ok(Math.cos(g.yaw-g.startAim.yaw)>.999999);
+  assert.ok(Math.abs(g.tilt-g.startAim.tilt)<1e-9);
+  g.lookBy(8,8);g.step(1/60);
+  assert.notEqual(g.tilt,g.startAim.tilt);
+});

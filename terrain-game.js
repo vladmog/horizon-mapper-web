@@ -131,6 +131,7 @@ class TerrainGame {
       this.yaw=Math.atan2(-camera.right[2],camera.right[0]);
       this.tilt=Math.PI/2;
     }
+    this.startAim={yaw:this.yaw,tilt:this.tilt};
     if(camera)this.thirdPerson=false;
     this.flying=this.position[1]*radius>ground+.05;
     this.spawn=[...this.position];this.heading=this.yaw;
@@ -190,19 +191,34 @@ class TerrainGame {
     const destination=this.targetDestination(point);
     return destination ? this.beginFlight(destination,'target') : false;
   }
+  arrivalAim(to,label) {
+    // Positions are feet. Aim from the arrival eye to the geographic marker
+    // itself, projected into the model in which the flight will finish.
+    const point=label==='start' ? this.getSelectedPoint?.() : this.startMarker;
+    if (point && [point.lat,point.lon,point.elev].every(Number.isFinite)) {
+      const [x,y,z]=terrainPoint(this.view.model,point);
+      const dx=x-to[0],dz=z-to[2],range=Math.hypot(dx,dz);
+      if (range*this.view.model.radius>.01) {
+        const markerOffset=label==='target' ? WALK_DEFAULT_FEET_CLEARANCE : 0;
+        const rise=y-to[1]-(markerOffset+WALK_EYE_OFFSET)/this.view.model.radius;
+        return {yaw:Math.atan2(-dx,-dz),tilt:-Math.atan2(rise,range)};
+      }
+    }
+    return this.startAim || {yaw:this.yaw,tilt:this.tilt};
+  }
   beginFlight(destination,label) {
     const plan=gameFlightPlan(this.view,this.position,destination.position);
     if(!plan) {
-      if(this.flight && Math.hypot(...destination.position.map((v,i)=>v-this.position[i]))*this.view.model.radius<.01) {
+      if(Math.hypot(...destination.position.map((v,i)=>v-this.position[i]))*this.view.model.radius<.01) {
+        const aim=this.arrivalAim(destination.position,label);
+        const changed=!!this.flight || this.yaw!==aim.yaw || this.tilt!==aim.tilt;
+        this.yaw=aim.yaw;this.tilt=aim.tilt;
         this.flight=null;this.position=[...destination.position];this.flying=destination.flying;
-        this.velocityY=0;this.speed=0;this.clearInput();this.view.dirty=true;return true;
+        this.velocityY=0;this.speed=0;this.clearInput();this.view.dirty=true;return changed;
       }
       return false;
     }
-    const dx=plan.to[0]-plan.from[0],dz=plan.to[2]-plan.from[2];
-    const yaw=Math.hypot(dx,dz)>1e-10?Math.atan2(-dx,-dz):this.yaw;
-    const turn=Math.atan2(Math.sin(yaw-this.yaw),Math.cos(yaw-this.yaw));
-    this.flight={...plan,elapsed:0,label,flying:destination.flying,startYaw:this.yaw,turn,startTilt:this.tilt};
+    this.flight={...plan,elapsed:0,label,flying:destination.flying,aimProgress:0};
     this.clearInput();this.velocityY=0;this.speed=0;this.flying=true;this.lastTime=null;
     this.view.dirty=true;
     return true;
@@ -213,11 +229,14 @@ class TerrainGame {
     const t=flight.elapsed/flight.duration,u=t*t*(3-2*t);
     this.position=flight.from.map((v,i)=>v+(flight.to[i]-v)*u);
     this.position[1]+=4*u*(1-u)*flight.lift;
-    if(!flight.manualLook) {
-      const turn=Math.min(1,t/.25),ease=turn*turn*(3-2*turn);
-      this.yaw=flight.startYaw+flight.turn*ease;
-      this.tilt=flight.startTilt+(.12-flight.startTilt)*ease;
-    }
+    // Apply the remaining share of the eased turn. A changed selection or a
+    // manual look during travel still converges by the final frame.
+    const aim=this.arrivalAim(flight.to,flight.label);
+    const share=t>=1 ? 1 : (u-flight.aimProgress)/Math.max(Number.EPSILON,1-flight.aimProgress);
+    const turn=Math.atan2(Math.sin(aim.yaw-this.yaw),Math.cos(aim.yaw-this.yaw));
+    this.yaw+=turn*share;
+    this.tilt+=(aim.tilt-this.tilt)*share;
+    flight.aimProgress=u;
     this.speed=dt>0?Math.hypot(...this.position.map((v,i)=>v-old[i]))*this.view.model.radius/dt:0;
     if(t>=1) {
       this.position=[...flight.to];this.flying=flight.flying;this.flight=null;
@@ -235,7 +254,6 @@ class TerrainGame {
   step(dt) {
     const radius=this.view.model.radius,keys=this.keys;
     if(this.flight) {
-      if(this.pointers.size)this.flight.manualLook=true;
       this.advanceFlight(dt);return;
     }
     let right=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));
@@ -280,7 +298,6 @@ class TerrainGame {
   lookBy(dx,dy) {
     this.yaw-=dx*.006;
     this.tilt=Math.max(-1.45,Math.min(Math.max(1.45,this.tilt),this.tilt+dy*.006));
-    if(this.flight && (dx || dy))this.flight.manualLook=true;
     this.view.dirty=true;
   }
   aimCamera() {
