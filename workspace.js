@@ -1,9 +1,16 @@
 "use strict";
 // Presentation only: geographic state and all map operations stay in the app.
 (() => {
+  const standalone = matchMedia("(display-mode: standalone)");
+  const fitStandaloneViewport = () => document.documentElement.classList.toggle(
+    "standalone-app", standalone.matches || navigator.standalone === true);
+  fitStandaloneViewport();
+  standalone.addEventListener("change", fitStandaloneViewport);
+  window.addEventListener("pageshow", fitStandaloneViewport);
   const sidebar = $("sidebar");
   const layout = sidebar.closest(".app-layout");
   const dock = layout.querySelector(".mobile-dock");
+  layout.style.setProperty("--dock-height", dock.offsetHeight + "px");
   // The dock can grow with safe-area insets, larger text and rotation.
   new ResizeObserver(() => {
     layout.style.setProperty("--dock-height", dock.offsetHeight + "px");

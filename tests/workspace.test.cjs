@@ -2200,3 +2200,23 @@ test('Ctrl drag smoothly zooms map and both terrain cameras without rotating',as
   }
   await close(page);
 });
+
+test('standalone launch anchors dock to stable viewport before scrolling and after rotation',async()=>{
+  const page=await pageFor({width:390,height:844},true);
+  await page.addInitScript(()=>Object.defineProperty(navigator,'standalone',{value:true}));
+  await page.reload();await page.waitForFunction(()=>document.documentElement.classList.contains('standalone-app'));
+  for(const size of [{width:390,height:844},{width:844,height:390},{width:390,height:844}]) {
+    await page.setViewportSize(size);
+    await page.waitForFunction(()=>Math.abs(document.querySelector('.mobile-dock').getBoundingClientRect().bottom-innerHeight)<1);
+    assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--app-viewport-height').trim()),'100lvh');
+    await page.screenshot({path:`/tmp/horizon-pwa-launch-${size.width}.png`});
+    const before=await page.locator('.mobile-dock').boundingBox();
+    await page.evaluate(()=>{window.scrollTo(0,1);window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));});
+    const after=await page.locator('.mobile-dock').boundingBox();
+    assert.ok(Math.abs(before.y-after.y)<1);
+    await noOverflow(page);
+  }
+  await page.locator('[data-mobile-panel="settings"]').click();
+  assert.ok(await page.locator('#sidebar').isVisible());
+  await close(page);
+});
