@@ -2032,3 +2032,60 @@ test('Walk bounds tile requests through repeated handoffs and horizon look chang
   await Promise.all(held.map(route=>route.abort()));
   await close(page);
 });
+
+test('Map and Horizon selections center the next Viewpoint without moving its observer or locking its look', async () => {
+  for (const source of ['coordinates', 'photo', 'gps']) {
+    const page = await pageFor({width:844,height:650}, true);
+    if (source === 'coordinates') await mapCoordinates(page);
+    if (source === 'photo') {
+      const data = await page.evaluate(() => {
+        window.exifr.gps = async () => ({latitude:48.8584, longitude:2.2945});
+        window.exifr.parse = async () => ({latitude:48.8584, longitude:2.2945, GPSLatitude:48.8584, GPSLongitude:2.2945, GPSLatitudeRef:'N', GPSLongitudeRef:'E', GPSImgDirection:317});
+        return document.createElement('canvas').toDataURL().split(',')[1];
+      });
+      await page.locator('#photo-file').setInputFiles({name:'source.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
+      await page.waitForFunction(() => mapView==='perspective' && terrainView?.photoCamera);
+      await page.locator('#comparison-horizon').click();
+    }
+    if (source === 'gps') {
+      await page.locator('#gate-btn').click();
+      await page.waitForFunction(() => window.__gpsRequests===1);
+      await page.evaluate(() => window.__gpsSuccess({coords:{latitude:48.8584,longitude:2.2945,accuracy:5},timestamp:Date.now()}));
+      await page.waitForFunction(() => HZ.P && terrainData && !HZ.loading);
+    }
+    const sourcePosition = await page.evaluate(() => JSON.stringify(S.pos.coords));
+    let previous;
+    for (const selector of ['#mp','#hz']) {
+      await page.locator('[data-v="2d"]').click();
+      const canvas=page.locator(selector), box=await canvas.boundingBox();
+      await canvas.click({position:{x:box.width*.73,y:box.height*.57}});
+      await page.waitForFunction(() => readoutTarget()?.selected);
+      const selection=await page.evaluate(() => readoutTarget().point);
+      if (previous) assert.notDeepEqual(selection,previous);
+      previous=selection;
+      await page.locator('#map-perspective').click();
+      await page.waitForFunction(() => mapView==='perspective' && terrainView.viewpointAim && terrainView.photoCamera && !HZ.loading);
+      const check = () => page.evaluate(() => {
+        drawTerrainView();
+        const c=terrainView.activeCamera, p=terrainPoint(terrainData,readoutTarget().point);
+        const delta=p.map((v,i)=>v-c.eye[i]), dot=axis=>delta.reduce((s,v,i)=>s+v*axis[i],0);
+        return {x:dot(c.right)/dot(c.forward),y:dot(c.up)/dot(c.forward),depth:dot(c.forward),
+          eye:c.eye, altitude:perspectiveSource().observerAltitude/terrainData.radius, position:JSON.stringify(S.pos.coords)};
+      });
+      if (source==='gps') await page.evaluate(()=>{ S.heading=359;S.aim=28;S.haveTilt=true; });
+      const pose=await check();
+      assert.ok(pose.depth>0 && Math.hypot(pose.x,pose.y)<1e-7,source+' '+selector);
+      assert.deepEqual(pose.eye,[0,pose.altitude,0]);assert.equal(pose.position,sourcePosition);
+      await page.locator('#mp3d').press('ArrowRight');
+      assert.ok(Math.abs((await check()).x)>.01);
+    }
+    await page.locator('[data-v="2d"]').click();
+    await page.evaluate(()=>clearSelection());
+    await page.locator('#map-perspective').click();
+    assert.ok(await page.evaluate(()=>{
+      drawTerrainView();
+      return !terrainView.viewpointAim && Math.abs(wrap180(terrainCameraBearing(terrainView.activeCamera)-curCenter()))<1e-6;
+    }));
+    await close(page);
+  }
+});

@@ -171,14 +171,18 @@ function terrainPhotoCamera(model, photo, aspect) {
       : photo.altitude < floor ? 'Eye level (photo altitude below terrain)' : 'Photo altitude' };
 }
 
+// Rendering, picking and Walk handoff must use the same Viewpoint pose.
+function terrainViewpointCamera(view, aspect) {
+  const source = view.photoSource;
+  const aim = view.viewpointAim || { bearing: source.bearing,
+    pitch: Math.max(-80, Math.min(80, view.photoPitch + (source.sensorPitch || 0))) };
+  return terrainPhotoCamera(view.model, {...source, ...aim, fov: view.photoFov}, aspect);
+}
+
 // Cast through the tapped pixel against the same terrain triangles we render.
 function terrainViewpointHit(view, x, y, width, height) {
   if (!view.model || !view.mesh || !(width > 0 && height > 0)) return null;
-  const camera = terrainPhotoCamera(view.model, {
-    ...view.photoSource,
-    pitch: Math.max(-80, Math.min(80, view.photoPitch + (view.photoSource.sensorPitch || 0))),
-    fov: view.photoFov
-  }, width / height);
+  const camera = terrainViewpointCamera(view, width / height);
   const dx = (2 * x / width - 1) * (width / height) / camera.focal;
   const dy = (1 - 2 * y / height) / camera.focal;
   const direction = camera.forward.map((v, i) => v + dx * camera.right[i] + dy * camera.up[i]);
@@ -466,6 +470,7 @@ class TerrainView {
         patch.heights?.length !== model.n*model.n || patch.heights.some(h=>!Number.isFinite(h)))))
       throw new Error('Invalid 3D terrain detail data.');
     if (!keepWalk) this.game?.stop();
+    this.viewpointAim = null;
     this.cancelGestures(); this.model = model; this.lastTarget = ''; this.detailPlan = null;
     this.orbitSource = this.orbitTarget = null;
     this.imagery.releaseView('base');
@@ -523,12 +528,29 @@ class TerrainView {
     if (!this.photoView || key !== this.photoSourceKey) this.dirty = true;
     this.photoView = true; this.photoSource = { ...source }; this.photoSourceKey = key;
   }
+  aimViewpointAt(point) {
+    this.viewpointAim = null;
+    if (!this.photoView || !point || ![point.lat, point.lon, point.elev].every(Number.isFinite)) return;
+    const [east, height, south] = terrainPoint(this.model, point);
+    const eye = terrainViewpointCamera(this, 1).eye;
+    const rise = height - eye[1], range = Math.hypot(east, south);
+    if (!Number.isFinite(range + rise) || Math.hypot(range, rise) < 1e-10) return;
+    this.viewpointAim = { bearing: range ? (Math.atan2(east, -south) * 180 / Math.PI + 360) % 360 : this.photoSource.bearing,
+      pitch: Math.atan2(rise, range) * 180 / Math.PI };
+    this.dirty = true;
+  }
   resetPhotoView() {
     if (!this.photoView) return;
+    this.viewpointAim = null;
     this.photoPitch = 0; this.photoFov = Math.max(15, Math.min(120, this.photoSource.fov));
     this.dirty = true; this.changed();
   }
   lookPhoto(dx, dy) {
+    if (this.viewpointAim) {
+      this.viewpointAim.bearing = (this.viewpointAim.bearing - dx * .25 + 360) % 360;
+      this.viewpointAim.pitch = Math.max(-90, Math.min(90, this.viewpointAim.pitch + dy * .2));
+      this.dirty = true; this.changed(); return;
+    }
     this.photoSource.bearing = ((this.photoSource.bearing - dx * .25) % 360 + 360) % 360;
     this.photoPitch = Math.max(-80, Math.min(80, this.photoPitch + dy * .2));
     this.photoLook(this.photoSource.bearing);
@@ -681,8 +703,7 @@ class TerrainView {
     gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     if(!this.model){this.activeCamera=null;return;}
     const gameCamera=this.game?.active ? this.game.camera() : null;
-    const photoCamera = !gameCamera && this.photoView ? terrainPhotoCamera(this.model,
-      {...this.photoSource,pitch:Math.max(-80,Math.min(80,this.photoPitch+(this.photoSource.sensorPitch || 0))),fov:this.photoFov},w/h) : null;
+    const photoCamera = !gameCamera && this.photoView ? terrainViewpointCamera(this,w/h) : null;
     this.photoCamera = photoCamera;
     let plans;
     if (gameCamera) {

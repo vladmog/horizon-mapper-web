@@ -1678,9 +1678,8 @@ function setMapView(view, patch = null) {
         resetLocationOutput();pendingGame=true;mapHorizon();return;
       }
       if (mapView === 'perspective' && terrainView?.photoView) {
-        walkCamera = terrainPhotoCamera(terrainData, {...perspectiveSource(),
-          pitch:Math.max(-80,Math.min(80,terrainView.photoPitch+(terrainView.photoSource.sensorPitch || 0))),
-          fov:terrainView.photoFov}, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight);
+        terrainView.setPhotoView(perspectiveSource());
+        walkCamera = terrainViewpointCamera(terrainView, terrainView.canvas.clientWidth/terrainView.canvas.clientHeight);
       }
     }
     gameReturnView=mapView;
@@ -1691,6 +1690,7 @@ function setMapView(view, patch = null) {
   }
   if (changingMode && terrainView?.model && mapView !== '2d' && mapView !== 'game')
     terrainModeViews[mapView] = terrainView.captureView();
+  if (changingMode && terrainView) terrainView.viewpointAim = null;
   if (view !== "2d") {
     try {
       if (!terrainView) {
@@ -1742,7 +1742,10 @@ function setMapView(view, patch = null) {
         if (walkCamera?.footprint) document.body.classList.add("game-mode");
         terrainView.game.start(source,curCenter(),walkCamera,mapView === "3d",startMarker);
       }
-      if (view === "perspective") terrainView.setPhotoView(perspectiveSource());
+      if (view === "perspective") {
+        terrainView.setPhotoView(perspectiveSource());
+        if (changingMode && HZ.selAz != null) terrainView.aimViewpointAt(readoutTarget()?.point);
+      }
       terrainView.dirty = true;
     } catch (error) {
       if (walkCamera?.footprint) document.body.classList.remove("game-mode");
@@ -1781,6 +1784,7 @@ function setMapView(view, patch = null) {
   if (changingMode && S.locationSource === 'photo' && (view === '3d' || view === 'perspective')) {
     const state = observerStates[view];
     changePhotoObserver(state.height, state.customHeight);
+    if (view === "perspective" && observerRefreshView?.selection) observerRefreshView.aimOnEntry = true;
   }
 }
 function perspectiveSource() {
@@ -2139,6 +2143,10 @@ function mapHorizon() {
       terrainView?.setModel(terrainData);
       if (observerRefreshView && observerRefreshView.mode === mapView) terrainView?.restoreView(observerRefreshView.view);
       else if (mapView === "3d") terrainView?.matchMapView({ ...MP, height: $("mp3d").clientHeight });
+      if (observerRefreshView?.aimOnEntry && mapView === "perspective" && HZ.selAz != null) {
+        terrainView.setPhotoView(perspectiveSource());
+        terrainView.aimViewpointAt(readoutTarget()?.point);
+      }
       observerRefreshView = null;
       MP.dirty = true;
       if(pendingGame){pendingGame=false;setMapView("game");}
