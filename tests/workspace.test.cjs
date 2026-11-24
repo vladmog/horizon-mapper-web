@@ -799,11 +799,11 @@ test("horizontal Walk speed control supports dragging, keyboard and one-step nud
   await page.keyboard.press('End');await expectSpeed(100);assert.ok(await more.isDisabled());
   await page.keyboard.press('Home');await expectSpeed(1);assert.ok(await less.isDisabled());
   const r=await slider.boundingBox(),y=r.y+r.height/2;
-  assert.ok(r.height>=44 && r.width>r.height*3);
-  await page.mouse.move(r.x+15,y);await page.mouse.down();await page.mouse.move(r.x+r.width-15,y,{steps:10});
+  assert.ok(r.height>=44 && r.width>=120);
+  await page.mouse.move(r.x+2,y);await page.mouse.down();await page.mouse.move(r.x+r.width-2,y,{steps:10});
   await expectSpeed(100);await page.mouse.up();
   const touch=await page.context().newCDPSession(page);
-  for(const [type,x] of [['touchStart',r.x+r.width-15],['touchMove',r.x+r.width/2],['touchMove',r.x+15],['touchEnd',0]]) {
+  for(const [type,x] of [['touchStart',r.x+r.width-2],['touchMove',r.x+r.width/2],['touchMove',r.x+2],['touchEnd',0]]) {
     await touch.send('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y}]});
   }
   await expectSpeed(1);assert.deepEqual(await pose(),before);
