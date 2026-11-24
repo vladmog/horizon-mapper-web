@@ -616,7 +616,7 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
     const controls=await page.locator('.game-actions').boundingBox(),look=await page.locator('#game-look').boundingBox();
     const targets=await page.locator('#game-target').boundingBox();
     assert.ok(targets.y+targets.height<=look.y);
-    const interactive=['#game-stick','#game-look','#game-target','#game-respawn','#game-goto-target','#game-maps','#game-speed','[data-game-key="e"]','[data-game-key="q"]'];
+    const interactive=['#game-stick','#game-look','#game-target','#game-respawn','#game-goto-target','#game-maps','.game-speed','[data-game-key="e"]','[data-game-key="q"]'];
     const boxes=await Promise.all(interactive.map(selector=>page.locator(selector).boundingBox()));
     for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++) {
       const a=boxes[i],b=boxes[j];
@@ -780,26 +780,39 @@ test("look circle matches scene drag sensitivity and does not rotate on an off-c
   await close(page);
 });
 
-test("vertical speed slider defaults to 25 and changes movement speed immediately", async()=>{
+test("horizontal Walk speed control supports dragging, keyboard and one-step nudges", async()=>{
   const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
   await page.locator('#map-game').click();await page.waitForFunction(()=>terrainView.game?.active);
-  const slider=page.locator('#game-speed');
-  assert.equal(await slider.inputValue(),'25');
-  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),25);
-  await slider.focus();await page.keyboard.press('ArrowUp');
-  assert.equal(await slider.inputValue(),'26');
-  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),26);
-  await page.keyboard.press('ArrowDown');assert.equal(await slider.inputValue(),'25');
-  await page.keyboard.press('End');assert.equal(await slider.inputValue(),'100');
-  await page.keyboard.press('Home');assert.equal(await slider.inputValue(),'1');
-  const r=await slider.boundingBox();
-  await page.mouse.click(r.x+r.width/2,r.y+r.height*.75);
-  const low=Number(await slider.inputValue());
-  await page.mouse.click(r.x+r.width/2,r.y+r.height*.25);
-  const high=Number(await slider.inputValue());assert.ok(high>low);
-  assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),high);
-  assert.equal(await page.locator('#game-speed-value').innerText(),high+'×');
-  assert.equal(await slider.getAttribute('aria-valuetext'),high+' times normal speed');
+  const slider=page.locator('#game-speed'),less=page.locator('#game-speed-less'),more=page.locator('#game-speed-more');
+  async function expectSpeed(value) {
+    assert.equal(await slider.inputValue(),String(value));
+    assert.equal(await page.evaluate(()=>terrainView.game.speedMultiplier),value);
+    assert.equal(await page.locator('#game-speed-value').innerText(),value+'×');
+    assert.equal(await slider.getAttribute('aria-valuetext'),value+' times normal speed');
+  }
+  await expectSpeed(25);
+  const pose=()=>page.evaluate(()=>{const g=terrainView.game;return [[...g.position],g.yaw,g.tilt,[...g.keys]];});
+  const before=await pose();
+  await more.click();await expectSpeed(26);await less.click();await expectSpeed(25);
+  await slider.focus();await page.keyboard.press('ArrowRight');await expectSpeed(26);
+  await page.keyboard.press('ArrowLeft');await expectSpeed(25);
+  await page.keyboard.press('End');await expectSpeed(100);assert.ok(await more.isDisabled());
+  await page.keyboard.press('Home');await expectSpeed(1);assert.ok(await less.isDisabled());
+  const r=await slider.boundingBox(),y=r.y+r.height/2;
+  assert.ok(r.height>=44 && r.width>r.height*3);
+  await page.mouse.move(r.x+15,y);await page.mouse.down();await page.mouse.move(r.x+r.width-15,y,{steps:10});
+  await expectSpeed(100);await page.mouse.up();
+  const touch=await page.context().newCDPSession(page);
+  for(const [type,x] of [['touchStart',r.x+r.width-15],['touchMove',r.x+r.width/2],['touchMove',r.x+15],['touchEnd',0]]) {
+    await touch.send('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y}]});
+  }
+  await expectSpeed(1);assert.deepEqual(await pose(),before);
+  await more.click();await expectSpeed(2);
+  const travel=await page.evaluate(()=>{
+    const g=terrainView.game,pos=[...g.position];g.keys.add('w');g.step(.05);g.keys.clear();
+    return Math.hypot(g.position[0]-pos[0],g.position[2]-pos[2])*g.view.model.radius;
+  });
+  assert.ok(Math.abs(travel-12*2*.05)<1e-6);
   await close(page);
 });
 

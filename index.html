@@ -171,6 +171,12 @@
     <div id="game-reticle" aria-hidden="true"><span></span></div>
     <div id="game-laser-status" role="status">Aim the laser at terrain</div>
     <div id="game-stick" class="game-stick" role="group" aria-label="Move joystick. Drag to move; farther from center moves faster."><span class="game-stick-thumb"></span><span class="stick-label">Move</span></div>
+    <div class="game-speed" role="group" aria-label="Movement speed controls">
+      <button type="button" id="game-speed-less" aria-label="Decrease movement speed by one">−</button>
+      <label for="game-speed"><span>Speed</span> <output id="game-speed-value" for="game-speed">25×</output></label>
+      <input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-valuetext="25 times normal speed">
+      <button type="button" id="game-speed-more" aria-label="Increase movement speed by one">+</button>
+    </div>
     <div class="game-right">
       <div class="game-actions" aria-label="Laser and movement controls">
         <button id="game-search" disabled aria-label="Search the location hit by the laser"><span class="control-icon" aria-hidden="true">⌕</span><span class="control-label">Search</span></button>
@@ -182,7 +188,6 @@
         <button data-game-key="e" aria-label="Hold to ascend"><span class="control-icon" aria-hidden="true">↑</span><span class="control-label">Up</span></button>
         <button id="game-maps" disabled aria-label="Open avatar location in Maps"><span class="control-icon" aria-hidden="true">↗</span><span class="control-label">Nav</span></button>
         <button data-game-key="q" aria-label="Hold to descend"><span class="control-icon" aria-hidden="true">↓</span><span class="control-label">Down</span></button>
-        <label class="game-speed"><span>Speed</span><input id="game-speed" type="range" min="1" max="100" step="1" value="25" aria-label="Movement speed" aria-orientation="vertical" aria-valuetext="25 times normal speed"><output id="game-speed-value" for="game-speed">25×</output></label>
       </div>
       <div id="game-look" class="game-stick" role="group" aria-label="Look and aim. Swipe inside this circle to look around; holding still stops turning."><span class="stick-label">Look / aim</span></div>
     </div>
@@ -2377,12 +2382,20 @@ $('game-camera').onclick=()=>{
   $('game-camera').setAttribute('aria-pressed',String(game.thirdPerson));
   terrainView.dirty=true;MP.dirty=true;
 };
-$('game-speed').oninput=()=>{
-  const speed=Number($('game-speed').value);
+const speedSlider=$('game-speed');
+function updateWalkSpeed() {
+  const speed=speedSlider.valueAsNumber;
   if(terrainView?.game)terrainView.game.speedMultiplier=speed;
   $('game-speed-value').textContent=speed+'×';
-  $('game-speed').setAttribute('aria-valuetext',speed+' times normal speed');
-};
+  speedSlider.setAttribute('aria-valuetext',speed+' times normal speed');
+  speedSlider.style.setProperty('--speed-fill',100*(speed-speedSlider.min)/(speedSlider.max-speedSlider.min)+'%');
+  $('game-speed-less').disabled=speed<=Number(speedSlider.min);
+  $('game-speed-more').disabled=speed>=Number(speedSlider.max);
+}
+speedSlider.oninput=updateWalkSpeed;
+$('game-speed-less').onclick=()=>{speedSlider.stepDown();updateWalkSpeed();};
+$('game-speed-more').onclick=()=>{speedSlider.stepUp();updateWalkSpeed();};
+updateWalkSpeed();
 $('game-respawn').onclick=()=>terrainView?.game?.reset();
 $('game-goto-target').onclick=()=>{
   const target=readoutTarget(),game=terrainView?.game;
