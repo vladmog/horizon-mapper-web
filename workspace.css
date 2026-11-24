@@ -1,59 +1,31 @@
-/* Horizon Mapper — field atlas. One responsive layout, shared by every view. */
+/* Horizon Mapper — experimental dark workspace. */
 :root {
-  color-scheme: light;
-  --bg: #f2f2f2;
-  --card: #ffffff;
-  --card2: #eeeeee;
-  --line: #d7d7d7;
-  --fg: #252525;
-  --dim: #686868;
-  --accent: #333333;
-  --good: #376c4b;
-  --warn: #8c631c;
-  --bad: #ad3f32;
-  --on-accent: #ffffff;
-  --accent-hover: #222222;
-  --hover: #e9e9e9;
-  --pressed: #e4e4e4;
-  --inset: #e7e7e7;
-  --line-strong: #aaaaaa;
-  --placeholder: #767676;
-  --overlay: #fafafaf2;
-  --focus: #527ac2;
-  --held-bg: #fff0cd;
-  --held-line: #bc9a4c;
-  --held-fg: #614916;
+  color-scheme: dark;
+  --bg: #101010;
+  --card: #161616;
+  --card2: #1d1d1d;
+  --line: #484848;
+  --fg: #f4f3ef;
+  --dim: #bdbcb9;
+  --accent: #f4f3ef;
+  --on-accent: #101010;
+  --accent-hover: #fff;
+  --hover: #272727;
+  --pressed: #343434;
+  --inset: #181818;
+  --line-strong: #737373;
+  --placeholder: #aaa9a6;
+  --overlay: #141414f5;
+  --focus: #e5e4df;
+  --good: #a4ceb1;
+  --warn: #e4bf77;
+  --bad: #ff9c91;
+  --held-bg: #3d321c;
+  --held-line: #ba9855;
+  --held-fg: #f0ce8b;
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --serif: Iowan Old Style, Palatino Linotype, Book Antiqua, Georgia, serif;
-  --radius: 14px;
-}
-/* Follow the device preference immediately, including changes while open. */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg: #161616;
-    --card: #232323;
-    --card2: #292929;
-    --line: #404040;
-    --fg: #ededed;
-    --dim: #b3b3b3;
-    --accent: #e5e5e5;
-    --on-accent: #181818;
-    --accent-hover: #ffffff;
-    --hover: #353535;
-    --pressed: #3c3c3c;
-    --inset: #272727;
-    --line-strong: #707070;
-    --placeholder: #a3a3a3;
-    --overlay: #232323f5;
-    --focus: #92b7ff;
-    --good: #95c9a6;
-    --warn: #e4bf77;
-    --bad: #ff9c91;
-    --held-bg: #3d321c;
-    --held-line: #ba9855;
-    --held-fg: #f0ce8b;
-  }
+  --radius: 0px;
 }
 
 * {
@@ -786,15 +758,6 @@ details > p {
   color: var(--fg);
   text-align: center;
   padding: 24px;
-}
-.contour-art {
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  inset: 0;
-  color: var(--placeholder);
-  opacity: 0.3;
-  pointer-events: none;
 }
 .welcome-content {
   position: relative;
@@ -1809,9 +1772,6 @@ h2,
 .project-empty strong {
   font-size: 18px;
 }
-.welcome-content .contour-art {
-  opacity: 0.15;
-}
 .workspace-heading {
   margin-bottom: 20px;
 }
@@ -2207,4 +2167,116 @@ body.has-location #sat-retry { flex: none; min-height: 36px; padding: 5px; font-
   #game-controls .game-actions #game-maps { left: -55px; right: auto; }
   #game-controls .game-actions #game-target { right: 0; width: 100px; }
   #game-controls .game-travel { left: auto; right: 0; }
+}
+
+/* Dark editorial workspace. Keep the image and map layers at native contrast. */
+:root {
+  --sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --display: "Avenir Next Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+}
+body { font: 400 14px/1.4 var(--sans); }
+.app-header {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+  gap: 10px;
+  height: 54px;
+}
+.brand, body.has-location .brand {
+  grid-column: 2; grid-row: 1;
+  gap: 0; font: 800 29px/.95 var(--display);
+  letter-spacing: -.045em; text-transform: uppercase;
+}
+.brand svg, .brand-sub, body.has-location .brand-sub { display: none; }
+.header-context { grid-column: 1; grid-row: 1; margin: 0; text-align: left; }
+#header-location { grid-column: 3; justify-self: end; }
+.app-header .quiet-button, .panel-tabs button, .mobile-dock button,
+#map-view button, #map-utilities button, .welcome-actions button, #panel-close {
+  font-family: var(--sans); font-weight: 400; text-transform: uppercase; letter-spacing: 0;
+}
+h1, h2, .section-heading h2, .project-empty strong {
+  font-family: var(--display); font-weight: 750; letter-spacing: -.024em; text-transform: uppercase;
+}
+.eyebrow, .card-label { font: 400 11px/1.4 var(--sans); letter-spacing: 0; }
+button, input:not([type="checkbox"]):not([type="color"]):not([type="range"]), select,
+.seg, .panel-tabs, .pill, .project-empty, .selection-tools button,
+body.has-location #map-view, body.has-location #map-fullscreen, #comparison-toolbar .seg,
+body.panel-open #sidebar, #game-search-card, .game-travel, #game-controls .game-actions button {
+  border-radius: 3px;
+  box-shadow: none;
+}
+#sidebar .section-heading { padding-block: 12px 14px; border-bottom: 1px solid var(--line); }
+.section-heading h2 { font-size: 30px; }
+.panel-tabs { background: none; border: solid var(--line); border-width: 1px 0; padding: 0; gap: 0; }
+.panel-tabs button, .mobile-dock button { border-radius: 0; }
+.panel-tabs button.active, .mobile-dock button[aria-pressed="true"] {
+  color: var(--fg); background: transparent; box-shadow: inset 0 -2px var(--fg);
+}
+.source-options { gap: 0 !important; border-top: 1px solid var(--line); }
+.source-options button {
+  border: 0; border-bottom: 1px solid var(--line); border-radius: 0;
+  background: transparent; padding-inline: 4px; font-weight: 500;
+}
+.source-options button:hover { background: var(--hover); }
+.source-options button.on { color: var(--fg); background: var(--pressed); }
+.source-options small { color: var(--dim); opacity: 1; }
+.sidebar-footer { font-family: var(--sans); }
+.sidebar-footer span + span { font: inherit; }
+body:not(.has-location) #workspace { padding: 0; }
+body:not(.has-location) .workspace-heading { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+body:not(.has-location) #view-panes > #card-map {
+  border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: 0; background: var(--bg);
+}
+body:not(.has-location) #mp-wrap { border: 0; border-radius: 0; }
+body:not(.has-location) #mp { height: max(460px,calc(100dvh - 54px)); }
+#gate {
+  grid-template-rows: minmax(72px,1fr) auto;
+  place-items: stretch; padding: 0;
+  background: var(--bg);
+}
+#gate::before {
+  content: ""; background: #222 url("./welcome-ridgeline.webp") center 42% / cover no-repeat;
+}
+.welcome-content {
+  width: 100%; padding: 20px 12px; background: var(--bg);
+  border-top: 1px solid var(--line); align-self: end;
+}
+.welcome-content h2 { font: 800 clamp(30px,3.6vw,54px)/1 var(--display); letter-spacing: -.035em; margin: 0 0 8px; }
+#gate-msg { max-width: none; font-size: 13px; }
+.welcome-actions { margin: 15px auto 10px; gap: 4px; }
+.welcome-actions button { padding-inline: 18px; border-color: var(--line-strong); }
+.welcome-actions .primary { border-color: var(--accent); }
+.welcome-note { margin: 0; font-size: 11px; }
+body.has-location #map-view { padding: 1px; }
+body.has-location #map-view button { border-radius: 2px; }
+body.has-location #map-utilities button, #comparison-toolbar .seg { box-shadow: none; }
+#game-controls .game-speed { border-radius: 3px; }
+#game-controls .game-travel button { border-radius: 2px; }
+#game-controls .game-actions button, .game-top button { font-family: var(--sans); }
+@media (min-width:901px) {
+  body:not(.has-location) #sidebar { top: 54px; max-height: calc(100dvh - 54px); }
+}
+@media (max-width:900px) {
+  .app-header { height: 48px; }
+  .brand { font-size: 25px; }
+  .header-context { font-size: 10px; }
+  body:not(.has-location) #workspace { padding-bottom: var(--dock-height,68px); }
+  body:not(.has-location) #mp { height: max(360px, calc(100dvh - 48px - var(--dock-height,68px))); }
+  .mobile-dock { gap: 0; background: var(--bg); }
+  body.panel-open #sidebar { background: var(--bg); }
+  .welcome-content { padding-block: 16px; }
+}
+@media (max-height:520px) and (orientation:landscape) {
+  body:not(.has-location) #mp { height: max(236px,calc(100dvh - 48px - var(--dock-height,52px))); }
+  #gate { grid-template: 1fr / minmax(0,1fr) minmax(0,1fr); }
+  .welcome-content { align-self: center; border-top: 0; }
+}
+@media (max-width:900px) {
+  .app-header { grid-template-columns: 1fr auto; }
+  .app-header .brand { grid-column: 1; justify-self: start; }
+  .header-context { grid-column: 2; justify-self: end; }
+  body.panel-open #sidebar, body.has-location.panel-open #sidebar {
+    left: env(safe-area-inset-left); right: env(safe-area-inset-right);
+    top: env(safe-area-inset-top); bottom: calc(var(--dock-height) + var(--panel-keyboard,0px)); border-radius: 0;
+    border-width: 1px 0; box-shadow: none;
+  }
 }

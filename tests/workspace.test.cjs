@@ -1219,7 +1219,7 @@ test('first-person GPU draw keeps hands stable during movement and restores the 
   await close(page);
 });
 
-test('system dark mode keeps controls readable and changes live without losing the mapped location',async()=>{
+test('dark workspace stays readable across device theme changes without losing the mapped location',async()=>{
   for(const size of [{width:390,height:844},{width:1440,height:900}]) {
     const page=await pageFor(size,true,'dark');
     const checkContrast=async selectors=>{
@@ -1258,7 +1258,7 @@ test('system dark mode keeps controls readable and changes live without losing t
     }
     for(const scheme of ['light','dark','light']) {
       await page.emulateMedia({colorScheme:scheme});
-      assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),scheme);
+      assert.equal(await page.evaluate(()=>getComputedStyle(document.documentElement).colorScheme),'dark');
       await page.waitForTimeout(180);
       await checkContrast(['#map-view button.on','#map-fullscreen','#map-fit','#mp-attribution']);
       assert.deepEqual(await page.evaluate(()=>({az:HZ.selAz,requests:window.__terrainRequests,lat:S.pos.coords.latitude})),state);
