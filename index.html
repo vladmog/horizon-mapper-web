@@ -1528,13 +1528,13 @@ mcv.addEventListener("pointerup", e => {
 mcv.addEventListener("pointercancel", mpEnd);
 mcv.addEventListener("lostpointercapture", e => { if (pts.has(e.pointerId)) mpEnd(e); });
 
-// A trackpad pinch reaches the page as a ctrl-modified wheel. A plain wheel is
-// the page scrolling and has to be left alone.
+// Mouse wheels and trackpad pinches zoom around the pointer within the map.
 mcv.addEventListener("wheel", e => {
-  if (!e.ctrlKey || !HZ.P) return;
+  if (!HZ.P) return;
   e.preventDefault();
   const [x, y] = mpLocal(e);
-  mpZoomAbout(x, y, MP.k * Math.exp(-e.deltaY / 180));
+  const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? mcv.clientHeight : 1);
+  mpZoomAbout(x, y, MP.k * Math.exp(-Math.max(-600, Math.min(600, delta)) / 180));
 }, { passive: false });
 
 /* ─── fetching the profile ───────────────────────────── */

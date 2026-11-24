@@ -947,7 +947,10 @@ test('photo opens beside an equal Viewpoint pane, with optional horizon and phot
     assert.equal(await page.locator('#photo-viewport').isVisible(),false);
     await page.locator('#comparison-photo').click();await assertSplit(page,true);
   }
-  await page.locator('#photo-viewport').hover();await page.keyboard.down('Control');await page.mouse.wheel(0,-150);await page.keyboard.up('Control');
+  await page.locator('#photo-viewport').hover();await page.mouse.wheel(0,-150);
+  await page.waitForFunction(()=>photoViewer.scale>1);
+  await page.mouse.wheel(0,300);await page.waitForFunction(()=>photoViewer.scale===1);
+  await page.keyboard.down('Control');await page.mouse.wheel(0,-150);await page.keyboard.up('Control');
   await page.waitForFunction(()=>photoViewer.scale>1);
   await page.locator('#photo-fit').click();assert.equal(await page.evaluate(()=>photoViewer.scale),1);
   await page.locator('[data-mobile-panel="location"]').click();await page.locator('#coordinate-pick').click();
@@ -2153,4 +2156,18 @@ test('Map and Horizon selections center the next Viewpoint without moving its ob
     }));
     await close(page);
   }
+});
+
+
+test('plain mouse wheel zooms the map both ways without scrolling the page',async()=>{
+  const page=await pageFor({width:1440,height:900},true);await mapCoordinates(page);
+  await page.locator('#mp').hover();
+  const before=await page.evaluate(()=>({k:MP.k,scroll:window.scrollY}));
+  await page.mouse.wheel(0,-120);await page.waitForFunction(k=>MP.k>k,before.k);
+  const zoomed=await page.evaluate(()=>MP.k);
+  await page.mouse.wheel(0,60);await page.waitForFunction(k=>MP.k<k,zoomed);
+  assert.equal(await page.evaluate(()=>window.scrollY),before.scroll);
+  await page.keyboard.down('Control');await page.mouse.wheel(0,-60);await page.keyboard.up('Control');
+  await page.waitForFunction(k=>MP.k>=k*.99,zoomed);
+  await close(page);
 });

@@ -1,7 +1,7 @@
 "use strict";
 
 // Shared by the loaded Settings page and the service worker that installs its shell.
-const HORIZON_RELEASE = 60;
+const HORIZON_RELEASE = 61;
 
 if (typeof document !== "undefined") {
   document.getElementById("settings-version").textContent = "Version " + HORIZON_RELEASE;

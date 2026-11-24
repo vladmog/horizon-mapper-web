@@ -26,9 +26,10 @@ class PhotoViewer {
     };
     for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) viewport.addEventListener(name, end);
     viewport.addEventListener("wheel", e => {
-      if (!e.ctrlKey || !image.naturalWidth) return;
+      if (!image.naturalWidth || image.hidden) return;
       e.preventDefault();
-      const p = this.local(e), scale = Math.max(1, Math.min(8, this.scale * Math.exp(-e.deltaY / 180)));
+      const delta = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? viewport.clientHeight : 1);
+      const p = this.local(e), scale = Math.max(1, Math.min(8, this.scale * Math.exp(-Math.max(-600, Math.min(600, delta)) / 180)));
       this.x = p.x - (p.x - this.x) * scale / this.scale;
       this.y = p.y - (p.y - this.y) * scale / this.scale;
       this.scale = scale; this.render(); this.reanchor();
