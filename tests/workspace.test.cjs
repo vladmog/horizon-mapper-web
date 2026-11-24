@@ -1442,6 +1442,26 @@ test('Fly to Target arrives at default height across hills and Start returns to 
   await assertDefaultStart(page);
   await assertArrivalFaces(page,false);
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
+  const tracks=await page.evaluate(()=>{
+    const g=terrainView.game,target=readoutTarget().point;
+    return ['target','start'].map(label=>{
+      g.lookBy(80,-35);
+      if(label==='target')g.goToTarget(target);else g.reset();
+      const marker=label==='target' ? {...g.startMarker,elev:g.startMarker.elev-WALK_DEFAULT_FEET_CLEARANCE} : target;
+      const point=terrainPoint(g.view.model,marker),samples=[];
+      let distance=0;
+      const dt=g.flight.duration/240;
+      while(g.flight){
+        const prev=g.position;
+        g.advanceFlight(dt);
+        distance+=Math.hypot(...g.position.map((v,i)=>v-prev[i]));
+        const c=g.aimCamera(),ray=point.map((v,i)=>v-c.eye[i]);
+        samples.push({distance,dot:ray.reduce((sum,v,i)=>sum+v*c.forward[i],0)/Math.hypot(...ray)});
+      }
+      return [.052,.5,.99,1].map(f=>samples.find(s=>s.distance>=f*distance).dot);
+    });
+  });
+  for(const dots of tracks)for(const dot of dots)assert.ok(dot>1-1e-9,'track the marker throughout travel after the initial turn');
   // A distant high marker is above the arrival eye. A coincident
   // horizontal location has no bearing and falls back to the entry pose.
   await page.evaluate(()=>{

@@ -171,8 +171,11 @@ test('return flight turns the short way across north/south wrap and restores ent
   g.startAim={yaw:-Math.PI+.04,tilt:.65};
   assert.ok(g.reset());
   const initial=g.yaw;
-  g.advanceFlight(g.flight.duration/2);
+  g.advanceFlight(g.flight.duration*.05);
   assert.ok(g.yaw>initial && g.yaw-initial<.07);
+  assert.ok(g.tilt>-.31 && g.tilt<.65);
+  g.advanceFlight(g.flight.duration*.10);
+  assert.ok(Math.abs(g.tilt-.65)<1e-9);
   g.lookBy(18,-9);
   g.advanceFlight(g.flight.duration);
   assert.ok(Math.abs(Math.sin(g.yaw-g.startAim.yaw))<1e-9);
