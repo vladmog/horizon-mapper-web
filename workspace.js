@@ -3,15 +3,28 @@
 (() => {
   const mobile = matchMedia("(max-width: 900px)");
   const sidebar = $("sidebar");
+  const layout = sidebar.closest(".app-layout");
+  const dock = layout.querySelector(".mobile-dock");
+  // The dock can grow with safe-area insets, larger text and rotation.
+  new ResizeObserver(() => {
+    layout.style.setProperty("--dock-height", dock.offsetHeight + "px");
+  }).observe(dock, {box: "border-box"});
+  function fitPanelViewport() {
+    const viewport = window.visualViewport;
+    if (!viewport || viewport.scale !== 1 || !document.body.classList.contains("panel-open")) return;
+    layout.style.setProperty("--panel-keyboard", Math.max(0, innerHeight - viewport.height - viewport.offsetTop) + "px");
+  }
+  window.visualViewport?.addEventListener("resize", fitPanelViewport);
+  window.visualViewport?.addEventListener("scroll", fitPanelViewport);
   let currentPanel = "location",
     returnFocus = null,
     lastStatus = "";
   function focusable() {
     return [
-      ...sidebar.querySelectorAll(
+      ...layout.querySelectorAll(
         "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,a[href]",
       ),
-    ].filter((el) => el.getClientRects().length && !el.closest("[hidden]"));
+    ].filter((el) => el.getClientRects().length && !el.closest("[hidden],[inert]"));
   }
   function setOverlay(open) {
     const active = open && mobile.matches;
@@ -19,13 +32,17 @@
     $("panel-backdrop").hidden = !active;
     $("workspace").inert = active;
     $("app-header").inert = active;
-    document.querySelector(".mobile-dock").inert = active;
+    document.querySelector(".skip-link").inert = active;
     if (active) {
-      sidebar.setAttribute("role", "dialog");
-      sidebar.setAttribute("aria-modal", "true");
+      layout.setAttribute("role", "dialog");
+      layout.setAttribute("aria-label", "Workspace navigation and tools");
+      layout.setAttribute("aria-modal", "true");
+      fitPanelViewport();
     } else {
-      sidebar.removeAttribute("role");
-      sidebar.removeAttribute("aria-modal");
+      layout.removeAttribute("role");
+      layout.removeAttribute("aria-label");
+      layout.removeAttribute("aria-modal");
+      layout.style.removeProperty("--panel-keyboard");
     }
     for (const b of document.querySelectorAll("[data-mobile-panel]"))
       b.setAttribute(
@@ -48,25 +65,30 @@
     setOverlay(true);
     if (mobile.matches) {
       sidebar.scrollTop = 0;
-      sidebar.querySelector(`[data-panel="${name}"]`).focus();
+      const heading = $(`panel-${name}`).querySelector("h2");
+      heading.tabIndex = -1;
+      heading.focus({preventScroll:true});
     }
   }
-  function showExplore() {
+  function showExplore(event) {
     clearDestinationSearch();
     const wasOpen = document.body.classList.contains("panel-open");
     setOverlay(false);
     update();
-    if (wasOpen && returnFocus?.isConnected)
-      returnFocus.focus({ preventScroll: true });
+    if (wasOpen) {
+      const explore = dock.querySelector('[data-mobile-panel="explore"]');
+      const target = event?.currentTarget === explore || !returnFocus?.getClientRects().length ? explore : returnFocus;
+      target.focus({preventScroll:true});
+    }
     if(S.pos)window.scrollTo({top:0,behavior:'instant'});
     MP.dirty = true;
   }
   for (const b of document.querySelectorAll("[data-panel]"))
     b.addEventListener("click", () => showPanel(b.dataset.panel));
   for (const b of document.querySelectorAll("[data-mobile-panel]"))
-    b.addEventListener("click", () =>
+    b.addEventListener("click", (event) =>
       b.dataset.mobilePanel === "explore"
-        ? showExplore()
+        ? showExplore(event)
         : showPanel(b.dataset.mobilePanel),
     );
   $("panel-close").onclick = showExplore;
@@ -87,14 +109,14 @@
       if (
         event.shiftKey &&
         (document.activeElement === first ||
-          !sidebar.contains(document.activeElement))
+          !layout.contains(document.activeElement))
       ) {
         event.preventDefault();
         last.focus();
       } else if (
         !event.shiftKey &&
         (document.activeElement === last ||
-          !sidebar.contains(document.activeElement))
+          !layout.contains(document.activeElement))
       ) {
         event.preventDefault();
         first.focus();

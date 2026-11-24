@@ -1429,8 +1429,9 @@ body.game-mode #view-compass {
     display: block;
     position: fixed;
     z-index: 40;
-    inset: max(12px, env(safe-area-inset-top)) 12px
-      max(12px, env(safe-area-inset-bottom));
+    inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+      calc(var(--dock-height) + var(--panel-keyboard, 0px) + 6px) max(12px, env(safe-area-inset-left));
+    overscroll-behavior: contain;
     max-height: none;
     border: 1px solid var(--line);
     border-radius: 16px;
@@ -1453,16 +1454,10 @@ body.game-mode #view-compass {
   .sidebar-top {
     margin-bottom: 14px;
   }
-  .panel-tabs {
-    position: sticky;
-    top: -20px;
-    z-index: 2;
-    background: var(--inset);
-    padding: 6px;
-    margin-bottom: 22px;
-  }
-  .panel-tabs button {
-    min-height: 44px;
+  .panel-tabs { display: none; }
+  body.panel-open .mobile-dock {
+    bottom: var(--panel-keyboard, 0px);
+    z-index: 41;
   }
   .section-heading h2 {
     font-size: 34px;
@@ -1766,7 +1761,7 @@ body.game-mode #view-compass {
     min-height: 36px;
   }
   .mobile-dock {
-    padding-block: 4px;
+    padding-block: 4px max(4px, env(safe-area-inset-bottom));
   }
   .mobile-dock button {
     min-height: 42px;

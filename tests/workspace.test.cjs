@@ -162,6 +162,7 @@ test("responsive startup and every tools panel fit 320px through desktop, withou
     assert.equal(await page.evaluate(() => window.__gpsRequests), 0);
     assert.equal(await page.locator("#gate").isVisible(), true);
     assert.equal(await page.locator("#card-horizon").isVisible(), false);
+    const dock = page.locator(".mobile-dock"), initialDock = await dock.boundingBox();
     for (const panel of ["location", "project", "settings"]) {
       if (width <= 900)
         await page.locator(`[data-mobile-panel="${panel}"]`).click();
@@ -173,9 +174,17 @@ test("responsive startup and every tools panel fit 320px through desktop, withou
         panelBounds.x >= 0 && panelBounds.x + panelBounds.width <= width + 1,
       );
       if (width <= 900) {
-        await page.locator("#panel-close").click();
-        assert.equal(await page.locator("#sidebar").isVisible(), false);
+        assert.equal(await page.locator(".panel-tabs").isVisible(),false);
+        assert.deepEqual(await dock.boundingBox(),initialDock);
+        assert.ok(panelBounds.y+panelBounds.height<=initialDock.y);
+        assert.equal(await dock.locator('[aria-pressed="true"]').getAttribute("data-mobile-panel"),panel);
+
       }
+    }
+    if (width <= 900) {
+      await dock.locator('[data-mobile-panel="explore"]').click();
+      assert.equal(await page.locator("#sidebar").isVisible(), false);
+      assert.deepEqual(await dock.boundingBox(),initialDock);
     }
     await close(page);
   }
@@ -184,7 +193,7 @@ test("mobile location panel validates input, traps keyboard focus and restores a
   const page = await pageFor({ width: 390, height: 844 });
   await page.locator("#gate-coordinates").click();
   assert.equal(
-    await page.locator("#sidebar").getAttribute("aria-modal"),
+    await page.locator(".app-layout").getAttribute("aria-modal"),
     "true",
   );
   await page.locator("#coordinate-input").fill("91, 2");
@@ -200,12 +209,9 @@ test("mobile location panel validates input, traps keyboard focus and restores a
   const first = page.locator("#panel-close");
   await first.focus();
   await page.keyboard.press("Shift+Tab");
-  assert.equal(
-    await page.evaluate(() =>
-      document.getElementById("sidebar").contains(document.activeElement),
-    ),
-    true,
-  );
+  assert.equal(await page.evaluate(()=>document.activeElement.dataset.mobilePanel),"settings");
+  await page.keyboard.press("Tab");
+  assert.ok(await first.evaluate(el=>el===document.activeElement));
   await page.keyboard.press("Escape");
   assert.equal(await page.locator("#sidebar").isVisible(), false);
   assert.equal(
@@ -499,7 +505,7 @@ test("a photo without GPS reports the error visibly and preserves the existing t
   await page.locator("#photo-file").setInputFiles({ name: "no-location.png", mimeType: "image/png", buffer: png });
   await page.waitForFunction(() => document.getElementById("photo-status").textContent.includes("No GPS coordinates"));
   assert.equal(await page.locator("#photo-status").isVisible(), true);
-  assert.equal(await page.locator("#sidebar").getAttribute("aria-modal"), "true");
+  assert.equal(await page.locator(".app-layout").getAttribute("aria-modal"), "true");
   assert.deepEqual(await page.evaluate(() => ({ lat: HZ.P.lat0, lon: HZ.P.lon0 })), origin);
   assert.equal(await page.evaluate(() => S.locationSource), "coordinates");
   await page.screenshot({ path: "/tmp/horizon-photo-error.png" });
@@ -1246,7 +1252,7 @@ test('system dark mode keeps controls readable and changes live without losing t
     await page.locator('#map-fullscreen').click();
     for(const panel of ['location','project','settings']) {
       await page.locator(size.width<=900?`[data-mobile-panel="${panel}"]`:`[data-panel="${panel}"]`).click();
-      await checkContrast(['.panel-tabs button.active',`#panel-${panel} .section-heading h2`]);
+      await checkContrast([size.width<=900?'.mobile-dock [aria-pressed="true"]':'.panel-tabs button.active',`#panel-${panel} .section-heading h2`]);
       if(panel==='settings')await page.screenshot({path:`/tmp/horizon-dark-settings-${size.width}.png`});
       if(size.width<=900)await page.locator('#panel-close').click();
     }
