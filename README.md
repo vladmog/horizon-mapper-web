@@ -34,10 +34,14 @@ Use **Full screen** beside the map-view selector to expand 2D, 3D, or Perspectiv
 
 In Game, mark a target with the laser or use an existing selected map target, then choose **Open in Apple Maps**, **Google Maps**, or **Gaia GPS**. This uses the same provider selected on the main page and the same target coordinates. When no target is selected, Nav opens the avatar’s current location.
 
-### Map entered coordinates
+### Search for a location
 
-Choose **Enter coordinates** (also available on the startup screen), paste a
-latitude/longitude pair such as `37.7749, -122.4194`, and tap **Map coordinates**.
+Choose **Search** on the startup screen or in the Location panel. Enter a street
+address or place name such as **Mount Fuji** or **Mount Everest**, then submit
+the search. Photon returns OpenStreetMap matches. A single match opens directly.
+When several places match, choose the one in the intended region.
+
+You can also enter a latitude/longitude pair such as `37.7749, -122.4194`.
 Use decimal degrees, latitude first, with negative values for south or west.
 Latitude must be between -80 and 80 degrees (the terrain engine's coverage),
 and longitude between -180 and 180. A comma or whitespace separates the values.

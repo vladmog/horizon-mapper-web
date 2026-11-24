@@ -37,6 +37,7 @@
     if (!["location", "project", "settings"].includes(name)) return;
     if (!document.body.classList.contains("panel-open"))
       returnFocus = document.activeElement;
+    if (name !== "location") clearDestinationSearch();
     currentPanel = name;
     for (const el of document.querySelectorAll("[data-tool-panel]"))
       el.hidden = el.dataset.toolPanel !== name;
@@ -51,8 +52,10 @@
     }
   }
   function showExplore() {
+    clearDestinationSearch();
     const wasOpen = document.body.classList.contains("panel-open");
     setOverlay(false);
+    update();
     if (wasOpen && returnFocus?.isConnected)
       returnFocus.focus({ preventScroll: true });
     if(S.pos)window.scrollTo({top:0,behavior:'instant'});

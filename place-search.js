@@ -71,10 +71,29 @@ const PlaceSearch = (() => {
     if(cache.size>64)cache.delete(cache.keys().next().value);
     return rank(point,elements);
   }
+  async function destinations(text, signal) {
+    const params = new URLSearchParams({q: text, limit: "5", lang: "en"});
+    const response = await fetch(new URL("/api/?" + params, endpoint), {signal, credentials: "omit"});
+    if (!response.ok) throw new Error(response.status === 429
+      ? "Search is busy. Try again shortly." : "Search is unavailable. Try again.");
+    const data = await response.json();
+    if (!Array.isArray(data.features)) throw new Error("Search did not finish. Try again.");
+    return data.features.flatMap(feature => {
+      const [lon, lat] = feature.geometry?.coordinates || [];
+      if (feature.geometry?.type !== "Point" || !valid({lat, lon}) || Math.abs(lat) > 80) return [];
+      const p = feature.properties || {};
+      const street = [p.housenumber, p.street].filter(Boolean).join(" ");
+      const name = p.name || street;
+      if (!name) return [];
+      const details = [...new Set([street, p.city || p.locality, p.state, p.country]
+        .filter(part => part && part !== name))];
+      return [{lat, lon, name, detail: details.join(", ") || [lat, lon].join(", ")}];
+    });
+  }
   function google(point,result) {
     const query=result?`${result.name} ${result.address || ''} near ${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`:`${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}`;
     return 'https://www.google.com/search?q='+encodeURIComponent(query);
   }
-  return {lookup,rank,query,google,records};
+  return {destinations,lookup,rank,query,google,records};
 })();
 if(typeof module!=='undefined')module.exports=PlaceSearch;

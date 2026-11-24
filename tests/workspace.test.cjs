@@ -1667,3 +1667,47 @@ test('every Walk entry starts airborne and both Fly to actions restore its terra
     await close(page);
   }
 });
+
+test("location search maps addresses and disambiguates mountain names", async () => {
+  const page = await pageFor({width: 390, height: 844}, true);
+  const cases = [
+    ["Mount Fuji", "Mount Fuji", "Japan", 35.3628384, 138.7307677],
+    ["Mount Everest", "Mount Everest", "Nepal", 27.9880614, 86.92521],
+    ["1600 Pennsylvania Avenue NW Washington DC", "White House", "United States", 38.8976387, -77.0365525],
+  ];
+  let calls = 0;
+  await page.route("https://photon.komoot.io/api/**", async route => {
+    const query = new URL(route.request().url()).searchParams.get("q");
+    calls++;
+    if (query === "Error") return route.fulfill({status: 503, body: ""});
+    const match = cases.find(row => row[0] === query);
+    const features = match ? [{geometry: {type: "Point", coordinates: [match[4], match[3]]},
+      properties: {name: match[1], country: match[2]}}] : [];
+    if (query.startsWith("Mount ")) features.push({geometry: {type: "Point", coordinates: [-91, 44]},
+      properties: {name: query, country: "United States"}});
+    await route.fulfill({json: {features}});
+  });
+  await page.locator("#gate-coordinates").click();
+  async function submit(query) {
+    await page.locator("#coordinate-input").fill(query);
+    await page.locator("#coordinate-input").press("Enter");
+  }
+  for (const [query, name, country, lat, lon] of cases) {
+    await submit(query);
+    if (query.startsWith("Mount ")) {
+      await page.getByRole("button", {name: name + " · " + country, exact: true}).click();
+    }
+    await page.waitForFunction(([lat, lon]) => window.__lastRequest?.lat === Number(lat.toFixed(6)) &&
+      window.__lastRequest.lon === Number(lon.toFixed(6)) && !HZ.loading, [lat, lon]);
+    await page.locator('[data-mobile-panel="location"]').click();
+  }
+  for (const [query, message] of [["No matches", "No matching"], ["Error", "unavailable"]]) {
+    await submit(query);
+    await page.waitForFunction(text => document.getElementById("coordinate-error").textContent.includes(text), message);
+    assert.equal(await page.evaluate(() => S.pos.destinationName), "White House");
+  }
+  await submit("35.1 139.2");
+  await page.waitForFunction(() => window.__lastRequest?.lat === 35.1 && window.__lastRequest.lon === 139.2);
+  assert.equal(calls, 5);
+  await close(page);
+});

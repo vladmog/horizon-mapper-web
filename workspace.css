@@ -421,6 +421,17 @@ p + p {
 #coordinate-error {
   margin-top: 10px;
 }
+#destination-results {
+  display: grid;
+  gap: 6px;
+}
+#destination-results:empty + #destination-credit {
+  display: none;
+}
+#destination-results button {
+  text-align: left;
+  white-space: normal;
+}
 #location-source {
   padding: 12px 0;
   border-top: 1px solid var(--line);

@@ -24,18 +24,20 @@
 <div class="sidebar-top"><span class="eyebrow">Controls</span><button id="panel-close" aria-label="Close tools and return to map">Back to map ×</button></div>
 <nav class="panel-tabs" aria-label="Workspace tools"><button data-panel="location" class="active" aria-pressed="true">Location</button><button data-panel="project" aria-pressed="false">Project</button><button data-panel="settings" aria-pressed="false">Settings</button></nav>
 <div class="panel-body" id="panel-location" data-tool-panel="location"><section class="card" id="card-location" aria-label="Location source">
-  <div class="section-heading"><span class="eyebrow">Location</span><h2>Set location</h2><p class="sub">Use coordinates, a photo, or device GPS.</p></div>
+  <div class="section-heading"><span class="eyebrow">Location</span><h2>Set location</h2><p class="sub">Search for a location, use a photo, or device GPS.</p></div>
   <div class="btns source-options">
-    <button id="coordinate-pick" aria-expanded="false" aria-controls="coordinate-form"><span class="source-symbol" aria-hidden="true">＋</span><span>Coordinates<small>Type or paste a location</small></span></button>
+    <button id="coordinate-pick" aria-expanded="false" aria-controls="coordinate-form"><span class="source-symbol" aria-hidden="true">＋</span><span>Search<small>Place, address, or coordinates</small></span></button>
     <button id="photo-pick"><span class="source-symbol" aria-hidden="true">▧</span><span>Photo<small>Read its GPS metadata</small></span></button>
     <button id="use-gps"><span class="source-symbol" aria-hidden="true">◎</span><span>My location<small>Use device GPS & compass</small></span></button>
   </div>
   <form id="coordinate-form" hidden novalidate>
-    <label for="coordinate-input">Latitude, longitude</label>
-    <input id="coordinate-input" type="text" placeholder="37.7749, -122.4194" autocomplete="off" spellcheck="false" aria-describedby="coordinate-help coordinate-error">
-    <p class="sub" id="coordinate-help">Decimal degrees, latitude first. Use minus for south or west. Terrain is available from 80° S to 80° N.</p>
-    <button id="coordinate-submit" type="submit">Map coordinates</button>
+    <label for="coordinate-input">Place, address, or coordinates</label>
+    <input id="coordinate-input" type="text" placeholder="Mount Fuji" autocomplete="off" spellcheck="false" aria-describedby="coordinate-help coordinate-error">
+    <p class="sub" id="coordinate-help">For coordinates, enter decimal degrees, latitude first. Use minus for south or west. Terrain is available from 80° S to 80° N.</p>
+    <button id="coordinate-submit" type="submit">Search</button>
     <div class="err" id="coordinate-error" role="status" aria-live="polite"></div>
+    <div id="destination-results"></div>
+    <p id="destination-credit" class="sub">Place data © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a></p>
   </form>
   <input id="photo-file" type="file" multiple accept="image/jpeg,image/heic,image/heif,image/tiff,image/png,.jpg,.jpeg,.heic,.heif,.tif,.tiff,.png" hidden>
   <div class="sub" id="location-source">No location selected.</div>
@@ -133,7 +135,7 @@
       ><button data-a="gaia">Gaia</button>
     </div>
   </div>
-<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Use coordinates, a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
+<p class="sub">Used by the location and selected-point map links.</p></section><section class="card guide"><h3>How to use</h3><ol><li><strong>Choose a viewpoint.</strong> Search for a location, use a geotagged photo, or your current position.</li><li><strong>Explore the terrain.</strong> Switch between the satellite map, 3D terrain, a ground-level viewpoint, and a walk through the landscape.</li><li><strong>Read the skyline.</strong> Drag to look around. Tap a ridge for its coordinates, distance, and altitude.</li></ol><details><summary>Map & movement controls</summary><p class="sub">Map: drag to pan. Terrain: drag to orbit, Shift-drag to pan, pinch or scroll to zoom. Walk: WASD or arrows to move, E/Q to ascend or descend. Escape returns to the map.</p></details></section><section class="card"><h3>Support & privacy</h3><div id="diagnostics" class="btns"><button id="debug-download">Download diagnostics</button></div><p class="sub">Export a diagnostic log when something goes wrong.</p><a href="./privacy.html" class="text-link">How your data is used ↗</a></section></div>
 </aside>
 <main id="workspace" tabindex="-1"><div class="workspace-heading"><div><h1>Explore</h1></div><div class="workspace-status"><span class="pill" id="pill-motion">SENSORS</span><span class="pill" id="pill-gps">GPS</span></div></div><div id="view-panes"><div class="card" id="card-map">
   <span id="mp-meta" hidden></span>
@@ -148,7 +150,7 @@
   <div id="map-utilities"><button id="map-fit" type="button" title="Fit view">Fit</button></div>
   <div id="mp-wrap"><span id="map-tap-hint" class="view-tap-hint" hidden>Tap a point for details</span><div class="selection-tools" hidden><button type="button" data-selection-details aria-label="Show selected point details">Details</button><button type="button" data-selection-clear aria-label="Clear selection">Clear</button></div><canvas id="mp" aria-label="Satellite map. Drag to pan; tap a point for location details."></canvas>
     <canvas id="mp3d" hidden tabindex="0" aria-label="3D terrain. Drag to orbit; Shift and drag to pan; pinch to zoom and move. Arrow keys orbit, plus and minus zoom, Home resets."></canvas>
-<section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Enter coordinates</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
+<section id="gate" aria-label="Start exploring"><svg class="contour-art" viewBox="0 0 900 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1"><path d="M-60 460C150 510 180 200 390 200S650 460 960 120"/><path d="M-60 430C140 480 195 170 390 175S680 430 960 90"/><path d="M-60 400C130 450 210 140 390 150S710 400 960 60"/><path d="M-60 370C120 420 225 110 390 125S740 370 960 30"/><path d="M-60 340C110 390 240 80 390 100S770 340 960 0"/><path d="M-60 490C160 540 165 230 390 225S620 490 960 150"/><path d="M-60 520C170 570 150 260 390 250S590 520 960 180"/><path d="M-60 550C180 600 135 290 390 275S560 550 960 210"/><path d="M-60 580C190 630 120 320 390 300S530 580 960 240"/></g></svg><div class="welcome-content"><span class="eyebrow">Start here</span><h2>Choose a<br>location.</h2><p id="gate-msg">Map terrain and the visible horizon from a location.</p><div class="welcome-actions"><button id="gate-btn" class="primary">Use my location <span aria-hidden="true">↗</span></button><button id="gate-photo">Open a photo</button><button id="gate-coordinates">Search</button></div><p class="sub welcome-note">Photos stay on your device.</p><div class="err" id="gate-err" role="status"></div></div></section>
     <div id="view-compass" hidden role="img" aria-label="View heading"><span id="view-compass-arrow"></span></div>
     <div id="terrain-empty" class="sub" hidden></div>
     <div id="mp-attribution">Source: <a href="https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer" target="_blank" rel="noopener">Esri, Vantor, Earthstar Geographics, and the GIS User Community</a></div>
@@ -394,7 +396,7 @@ function render(ts) {
       : altitude.toFixed(0) + " m" + (c.altitudeAccuracy ? ` ±${c.altitudeAccuracy.toFixed(0)}` : "");
     $("v-spd").textContent = c.speed == null ? "--" : miles(c.speed * 3600).toFixed(1) + " mph";
     $("foot").textContent = S.locationSource === "photo" ? "Location from photo GPS metadata"
-      : S.locationSource === "coordinates" ? "Location from entered coordinates"
+      : S.locationSource === "coordinates" ? (p.destinationName || "Location from entered coordinates")
       : "fix " + new Date(p.timestamp).toLocaleTimeString();
   } else {
     for (const id of ["v-lat", "v-lon", "v-dms", "v-acc", "v-alt", "v-spd"]) $(id).textContent = "--";
@@ -1834,7 +1836,16 @@ function resetLocationOutput() {
 }
 
 let photoRequest = 0;
+let destinationRequest = null;
+function clearDestinationSearch() {
+  destinationRequest?.abort();
+  destinationRequest = null;
+  $("destination-results").replaceChildren();
+  $("coordinate-error").textContent = "";
+  $("coordinate-input").removeAttribute("aria-invalid");
+}
 function closeCoordinateForm() {
+  clearDestinationSearch();
   $("coordinate-form").hidden = true;
   $("coordinate-pick").setAttribute("aria-expanded", "false");
   $("coordinate-pick").classList.remove("on");
@@ -1860,18 +1871,54 @@ function parseCoordinates(value) {
     throw new Error("Longitude must be between -180 and 180 degrees.");
   return { latitude, longitude, altitude: null, accuracy: null, speed: null };
 }
-$("coordinate-form").onsubmit = event => {
+$("coordinate-input").oninput = clearDestinationSearch;
+$("coordinate-form").onsubmit = async event => {
   event.preventDefault();
-  let coords;
-  try { coords = parseCoordinates($("coordinate-input").value); }
-  catch (error) {
-    $("coordinate-error").textContent = error.message;
-    $("coordinate-input").setAttribute("aria-invalid", "true");
-    $("coordinate-input").focus();
-    return false;
+  clearDestinationSearch();
+  if ($("coordinate-submit").disabled) return;
+  const query = $("coordinate-input").value.trim();
+  const status = $("coordinate-error");
+  if (!query || /^[+.,\d\s-]+$/.test(query)) {
+    try {
+      if (!query) throw new Error("Enter a place, address, or coordinates.");
+      mapDestination(parseCoordinates(query));
+    } catch (error) {
+      status.textContent = error.message;
+      $("coordinate-input").setAttribute("aria-invalid", "true");
+      $("coordinate-input").focus();
+    }
+    return;
   }
-  $("coordinate-error").textContent = "";
-  $("coordinate-input").removeAttribute("aria-invalid");
+  const request = new AbortController();
+  destinationRequest = request;
+  status.textContent = "Searching…";
+  const timer = setTimeout(() => request.abort(), 12000);
+  try {
+    const places = await PlaceSearch.destinations(query, request.signal);
+    if (destinationRequest !== request) return;
+    const select = place => mapDestination({
+      latitude: place.lat, longitude: place.lon, altitude: null, accuracy: null, speed: null
+    }, place.name);
+    if (places.length === 1) { select(places[0]); return; }
+    status.textContent = places.length ? "Choose a location." : "No matching locations in the terrain coverage area. Try a more specific search.";
+    for (const place of places) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = place.name + " · " + place.detail;
+      button.onclick = () => select(place);
+      $("destination-results").append(button);
+    }
+  } catch (error) {
+    if (destinationRequest === request) status.textContent = request.signal.aborted
+      ? "Search timed out. Try again." : error instanceof TypeError ? "Could not reach search. Check your connection and try again." : error.message;
+  } finally {
+    clearTimeout(timer);
+    if (destinationRequest === request) destinationRequest = null;
+  }
+};
+function mapDestination(coords, name) {
+  window.projectAssets?.leaveAssetForDestination();
+  clearDestinationSearch();
   ++photoRequest;
   resetLocationOutput();
   clearPhotoPreview();
@@ -1879,7 +1926,7 @@ $("coordinate-form").onsubmit = event => {
   if (watchId !== null) navigator.geolocation.clearWatch(watchId);
   watchId = null;
   S.locationSource = "coordinates"; S.photoName = "";
-  S.pos = { coords, timestamp: Date.now() }; S.posErr = null;
+  S.pos = { coords, timestamp: Date.now(), destinationName: name }; S.posErr = null;
   HZ.photoInitialBearing = 0; HZ.photoBearing = 0; HZ.vCenter = 0;
   photoObserverHeight = "ground";
   $("use-gps").classList.remove("on");
@@ -1888,12 +1935,11 @@ $("coordinate-form").onsubmit = event => {
   $("hz-bearing-label").textContent = "View bearing";
   $("pan-hint").textContent = "Slide the profile to look around this location. The view starts facing north.";
   $("pan-hint").hidden = false;
-  $("location-source").textContent = `Coordinates: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
+  $("location-source").textContent = `${name || "Coordinates"}: ${coords.latitude.toFixed(6)}, ${coords.longitude.toFixed(6)}`;
   $("photo-status").textContent = "";
   mapHorizon();
   window.HorizonUI?.showExplore();
-  return true;
-};
+}
 $("photo-pick").onclick = () => $("photo-file").click();
 $("gate-photo").onclick = () => {
   $("gate").classList.add("hidden");

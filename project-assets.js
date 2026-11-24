@@ -112,7 +112,7 @@ if(typeof document!=='undefined') (()=>{
     }
   }
   async function run(fn) {
-    if(state.busy)return;state.busy=true;list();
+    if(state.busy)return;clearDestinationSearch();state.busy=true;list();
     for(const id of ['coordinate-pick','coordinate-submit','photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=true;
     try{await fn();}catch(error){say(error.message||String(error));}
     finally{state.busy=false;list();for(const id of ['coordinate-pick','coordinate-submit','photo-pick','use-gps','asset-add','project-save','project-new','project-open','project-import','project-export'])$(id).disabled=false;}
@@ -337,13 +337,10 @@ if(typeof document!=='undefined') (()=>{
       }
     });
   };
-  const useCoordinates=$('coordinate-form').onsubmit;
-  $('coordinate-form').onsubmit=event=>{
-    if(state.busy){event.preventDefault();return false;}
+  function leaveAssetForDestination() {
     capture();
-    if(!useCoordinates(event))return false;
-    state.active=null;dirty();list();return true;
-  };
+    state.active=null;dirty();list();
+  }
   const useGPS=$('use-gps').onclick;$('use-gps').onclick=()=>{capture();state.active=null;useGPS();dirty();list();};
   $('project-fit').onclick=fitAll;$('project-save').onclick=()=>run(save);
   $('project-open').onclick=()=>run(async()=>{const all=await stored('getAll'),p=all.find(p=>p.id===$('project-saved').value);if(p)await open(p);else say('Choose a saved project first.');});
@@ -357,7 +354,7 @@ if(typeof document!=='undefined') (()=>{
   });};
   $('project-keep-target').onclick=()=>{capture();const photo=current();if(!photo?.target){say('Select a photo and mark a target first.');return;}
     photo.targets ||= [];if(!photo.targets.some(t=>t.point.lat===photo.target.point.lat&&t.point.lon===photo.target.point.lon&&t.point.elev===photo.target.point.elev))photo.targets.push(clone(photo.target));list();dirty();say('Target kept with '+photo.name+'.');};
-  window.projectAssets={get active(){return current()?.kind==='photo'?state.active:null;},capture,draw2D,draw3D,state,addFiles,activate,scene,save,open,record,parseGPX};
+  window.projectAssets={get active(){return current()?.kind==='photo'?state.active:null;},leaveAssetForDestination,capture,draw2D,draw3D,state,addFiles,activate,scene,save,open,record,parseGPX};
   refreshSaved().catch(()=>say('Local project storage is unavailable. Export projects to keep a copy.'));
 })();
 if(typeof module!=='undefined')module.exports={trackRibbon};
