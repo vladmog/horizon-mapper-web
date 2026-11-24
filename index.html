@@ -1644,7 +1644,7 @@ function setMapView(view, patch = null) {
   finishWalkPatch();
   const changingMode = view !== mapView;
   const leavingWalkPatch = mapView === "game" && terrainView?.model !== terrainData;
-  const fitSelectedTerrain = !leavingWalkPatch && changingMode && view === '3d' && HZ.selAz != null &&
+  const fitSelectedTerrain = !(mapView === "game" && terrainView?.game?.startedOnPatch) && changingMode && view === '3d' && HZ.selAz != null &&
     (mapView === 'perspective' || mapView === 'game');
   if (!["2d", "3d", "perspective", "game"].includes(view)) return;
   if ((view === "perspective" || view === "game") && !terrainData) return;
@@ -1654,6 +1654,14 @@ function setMapView(view, patch = null) {
   if (view === 'game' && changingMode) {
     if (mapView === '3d') {
       walkCamera = patch?.camera || terrainOrbitCamera(terrainView);
+      if (!patch && terrainView.orthographic) {
+        // Orthographic scale comes from its projection, independent of the
+        // arbitrary clipping eye. Capture the visible extent before fullscreen.
+        const halfHeight=walkCamera.halfHeight*terrainData.half/(256*2**terrainData.z);
+        const canvas=terrainView.canvas;
+        walkCamera.footprint={halfHeight,halfWidth:halfHeight*canvas.clientWidth/canvas.clientHeight};
+        walkCamera.eye=[...terrainView.focus];
+      }
       if (!patch && Math.max(Math.abs(walkCamera.eye[0]),Math.abs(walkCamera.eye[2])) > 1) {
         try { loadWalkPatch(walkCamera); }
         catch { finishWalkPatch("Could not start the Walk terrain request. Select Walk to retry."); }
@@ -1713,16 +1721,26 @@ function setMapView(view, patch = null) {
       else if (changingMode) terrainView.photoView = false;
       if (view === "3d") terrainView.photoView = false;
       if (view === 'game' && changingMode) {
+        const source={lat:S.pos.coords.latitude,lon:S.pos.coords.longitude};
+        let startMarker=null;
+        if (mapView === "3d" && S.locationSource === "coordinates") {
+          const point=terrainPoint(terrainData,{...source,elev:0});
+          const ground=gameGround(terrainView,point[0],point[2]);
+          if (ground!==null) startMarker={...source,elev:ground};
+        }
         if (patch) terrainView.setModel(patch.model);
         terrainView.game ||= new TerrainGame(terrainView);
         terrainView.game.observerModel = terrainData;
+        terrainView.game.startedOnPatch = !!patch;
         terrainView.game.onExit=()=>setMapView(gameReturnView);
         terrainView.game.speedMultiplier=Number($('game-speed').value);
-        terrainView.game.start({lat:S.pos.coords.latitude,lon:S.pos.coords.longitude},curCenter(),walkCamera,mapView === "3d");
+        if (walkCamera?.footprint) document.body.classList.add("game-mode");
+        terrainView.game.start(source,curCenter(),walkCamera,mapView === "3d",startMarker);
       }
       if (view === "perspective") terrainView.setPhotoView(perspectiveSource());
       terrainView.dirty = true;
     } catch (error) {
+      if (walkCamera?.footprint) document.body.classList.remove("game-mode");
       if (patch) {
         terrainView.setModel(terrainData);
         terrainView.restoreView(terrainModeViews["3d"]);

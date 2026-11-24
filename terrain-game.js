@@ -88,7 +88,14 @@ function gameFlightPlan(view, from, to) {
   return {from:[...from],to:[...to],lift,duration};
 }
 
+const WALK_DEFAULT_EYE_CLEARANCE = 30;
+const WALK_EYE_OFFSET = 1.65;
 const WALK_MAX_HEIGHT = 5000; // metres from terrain to avatar feet
+
+function walkFocalLength(width,height) {
+  const portrait=width>0 && width<=900 && height>width;
+  return (portrait ? width/height : 1)/Math.tan(Math.PI/6);
+}
 
 class TerrainGame {
   constructor(view) {
@@ -96,7 +103,7 @@ class TerrainGame {
     this.thirdPerson=false;this.yaw=0;this.tilt=.24;this.phase=0;this.speed=0;this.flying=false;this.speedMultiplier=25;
     this.bind();
   }
-  start(position, bearing=0, camera=null, fromTerrain=false) {
+  start(position, bearing=0, camera=null, fromTerrain=false, startMarker=null) {
     const point=camera ? camera.eye : terrainPoint(this.view.model,{...position,elev:0});
     const ground=gameGround(this.view,point[0],point[2]);
     if(ground===null) throw new Error('Map the current location before starting Game.');
@@ -104,16 +111,30 @@ class TerrainGame {
     // Map and Viewpoint start airborne, including photos
     // whose Viewpoint is at ground level. Preserve a higher Viewpoint eye,
     // but keep at least the default 30 m eye clearance. Physics tracks feet.
-    const minimumEye=fromTerrain ? 1.65 : 30;
-    const eyeAltitude=Math.max(ground+minimumEye,camera ? camera.eye[1]*radius : ground+30);
+    const minimumEye=fromTerrain ? WALK_EYE_OFFSET : WALK_DEFAULT_EYE_CLEARANCE;
+    let desiredEye=camera ? camera.eye[1]*radius : ground+WALK_DEFAULT_EYE_CLEARANCE;
+    if (camera?.footprint) {
+      const {clientWidth:w,clientHeight:h}=this.view.canvas, model=this.view.model;
+      const {halfWidth,halfHeight}=camera.footprint;
+      // The source spans are fractions of the Mercator world so they also
+      // survive a move to a temporary mesh with a different radius or zoom.
+      const metresPerWorld=radius*(256*2**model.z)/model.half;
+      desiredEye=ground+metresPerWorld*Math.max(halfHeight,halfWidth*h/w)*walkFocalLength(w,h);
+    }
+    const eyeAltitude=Math.max(ground+minimumEye,desiredEye);
     this.fromTerrain=fromTerrain;
-    this.position=[point[0],(eyeAltitude-1.65)/radius,point[2]];
+    this.position=[point[0],(eyeAltitude-WALK_EYE_OFFSET)/radius,point[2]];
     this.yaw=camera ? Math.atan2(-camera.forward[0],-camera.forward[2]) : -bearing*Math.PI/180;
     this.tilt=camera ? -Math.asin(Math.max(-1,Math.min(1,camera.forward[1]))) : .24;
+    if (camera?.footprint) {
+      this.yaw=Math.atan2(-camera.right[2],camera.right[0]);
+      this.tilt=Math.PI/2;
+    }
     if(camera)this.thirdPerson=false;
     this.flying=this.position[1]*radius>ground+.05;
     this.spawn=[...this.position];this.spawnFlying=this.flying;
     this.spawnClearance=Math.max(0,this.position[1]*radius-ground);this.heading=this.yaw;
+    this.startMarker=startMarker && {...startMarker,elev:startMarker.elev+this.spawnClearance};
     this.phase=0;this.speed=0;this.velocityY=0;
     window.getSelection?.()?.removeAllRanges();
     this.flight=null;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
@@ -122,20 +143,45 @@ class TerrainGame {
   clearInput() { this.keys.clear();this.pointers.clear();this.stick={x:0,y:0};this.resetStick?.();this.resetLook?.(); }
   relativeToStart() {
     const radius=this.view.model.radius;
-    const east=(this.position[0]-this.spawn[0])*radius,north=(this.spawn[2]-this.position[2])*radius;
+    const start=this.startMarker ? terrainPoint(this.view.model,this.startMarker) : this.spawn;
+    const east=(this.position[0]-start[0])*radius,north=(start[2]-this.position[2])*radius;
     const distance=Math.hypot(east,north);
     return {distance,bearing:distance<.5?null:(Math.atan2(east,north)*180/Math.PI+360)%360,
-      height:(this.position[1]-this.spawn[1])*radius};
+      height:(this.position[1]-start[1])*radius};
   }
-  reset() { return this.beginFlight({position:[...this.spawn],flying:this.spawnFlying ?? false},'start'); }
-  targetDestination(point) {
+  reset() {
+    if (!this.startMarker) return this.beginFlight({position:[...this.spawn],flying:this.spawnFlying ?? false},'start');
+    let destination=this.targetDestination(this.startMarker,this.spawnClearance);
+    if (!destination && this.observerModel && this.view.model!==this.observerModel) {
+      // The source mesh stays resident throughout a temporary Walk. Cross the
+      // unloaded gap immediately, then animate the covered part of the route.
+      const current=walkGeographicPoint(this.view.model,this.position);
+      const observer=this.observerModel;
+      const start=terrainPoint(observer,this.startMarker);
+      const entry=terrainPoint(observer,current);
+      let fraction=1;
+      for (const axis of [0,2]) {
+        if (Math.abs(entry[axis])>1)
+          fraction=Math.min(fraction,(Math.sign(entry[axis])-start[axis])/(entry[axis]-start[axis]));
+      }
+      const spawnGeo=walkGeographicPoint(this.view.model,this.spawn);
+      this.view.setModel(observer,{keepWalk:true});
+      this.spawn=terrainPoint(observer,spawnGeo);
+      for (const axis of [0,2]) entry[axis]=Math.max(-1,Math.min(1,start[axis]+fraction*(entry[axis]-start[axis])));
+      const floor=gameGround(this.view,entry[0],entry[2]);
+      entry[1]=Math.max(entry[1],floor/observer.radius);
+      this.position=entry;this.flight=null;this.clearInput();this.lastTime=null;
+      destination=this.targetDestination(this.startMarker,this.spawnClearance);
+    }
+    if (!destination) return false;
+    this.startMarker.elev=destination.position[1]*this.view.model.radius;
+    return this.beginFlight(destination,'start');
+  }
+  targetDestination(point, clearance=WALK_DEFAULT_EYE_CLEARANCE-WALK_EYE_OFFSET) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
     const position=terrainPoint(this.view.model,point);
     const ground=gameGround(this.view,position[0],position[2]);
     if(ground===null)return null;
-    // Arrive at the starting clearance above this target's terrain, not at
-    // its surface or at the player's current (possibly manually changed) height.
-    const clearance=this.spawnClearance ?? 0;
     position[1]=(ground+clearance)/this.view.model.radius;
     return {position,flying:clearance>.05};
   }
@@ -232,21 +278,20 @@ class TerrainGame {
   }
   lookBy(dx,dy) {
     this.yaw-=dx*.006;
-    this.tilt=Math.max(-1.45,Math.min(1.45,this.tilt+dy*.006));
+    this.tilt=Math.max(-1.45,Math.min(Math.max(1.45,this.tilt),this.tilt+dy*.006));
     if(this.flight && (dx || dy))this.flight.manualLook=true;
     this.view.dirty=true;
   }
   aimCamera() {
     const radius=this.view.model.radius;
-    const eye=[this.position[0],this.position[1]+1.65/radius,this.position[2]];
+    const eye=[this.position[0],this.position[1]+WALK_EYE_OFFSET/radius,this.position[2]];
     const forward=[-Math.sin(this.yaw)*Math.cos(this.tilt),-Math.sin(this.tilt),-Math.cos(this.yaw)*Math.cos(this.tilt)];
     const right=[Math.cos(this.yaw),0,-Math.sin(this.yaw)];
     const up=[right[1]*forward[2]-right[2]*forward[1],right[2]*forward[0]-right[0]*forward[2],right[0]*forward[1]-right[1]*forward[0]];
     const width=this.view.canvas?.clientWidth || 0,height=this.view.canvas?.clientHeight || 0;
     // Keep a 60-degree horizontal view on portrait phones instead of cropping
     // the landscape camera down to a narrow slice. Landscape stays unchanged.
-    const portrait=width>0 && width<=900 && height>width;
-    const focal=(portrait ? width/height : 1)/Math.tan(Math.PI/6);
+    const focal=walkFocalLength(width,height);
     return {eye,right,up,forward,focal,near:.05/radius,far:Math.max(4,eye[1]+4),halfHeight:0,groundElevation:gameGround(this.view,this.position[0],this.position[2])};
   }
   camera() {

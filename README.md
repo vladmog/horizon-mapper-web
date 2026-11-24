@@ -63,17 +63,22 @@ See `docs/ui-redesign.md` for the acceptance criteria, browser checks, and devic
 
 ## Walk starting height
 
-From Terrain, Walk inherits the camera’s geographic position, altitude, and aim.
+From an orbited Terrain view, Walk inherits the camera’s position, altitude, and aim.
+From the initial top-down view, Walk looks straight down at the same center and
+fits the visible ground footprint using the fullscreen Walk lens.
 If the camera is outside the loaded mesh, Walk loads a temporary terrain square
 centered there (up to 6 km from center to edge). Cancel keeps the Terrain view.
 Terrain entry preserves altitude until the avatar’s feet meet the ground and
 allows flight above the usual ceiling. Exiting the temporary area restores the
-original model and Terrain view. Movement stays inside the session’s loaded square.
+original model and Terrain view. Movement stays inside the session’s loaded square. For a searched location,
+entering Walk from Terrain keeps the camera spawn separate from Start. Fly to
+Start returns to the search marker at the initial clearance above ground. If
+the marker is outside the temporary square, Walk switches back to the original
+terrain and flies the remaining covered distance.
 
 Map and Viewpoint entries retain a minimum eye height of 30 m and the usual
-5,000 m flight ceiling. Walk uses its own lens. Fly to Target
-and Fly to Start restore that session’s initial clearance above local terrain,
-even after manually landing or changing altitude.
+5,000 m flight ceiling. Fly to Target arrives with the avatar’s eyes 30 m
+above the terrain at the marked point, regardless of the departure altitude.
 
 ## Walk laser search
 

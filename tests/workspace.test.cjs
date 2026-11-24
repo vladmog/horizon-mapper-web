@@ -1356,7 +1356,7 @@ test('first-person gun surfaces occlude correctly regardless of triangle submiss
   await close(page);
 });
 
-test('Fly to Target and Start preserve initial height above terrain after climbing and across hills',async()=>{
+test('Fly to Target arrives at default height across hills and Start restores initial clearance',async()=>{
   const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
   await page.locator('[data-v="perspective"]').click();await page.locator('#map-game').click();
   await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-target').disabled);
@@ -1375,10 +1375,10 @@ test('Fly to Target and Start preserve initial height above terrain after climbi
     const g=terrainView.game,r=g.view.model.radius;
     return g.camera().eye[1]*r-gameGround(g.view,g.position[0],g.position[2]);
   });
-  assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
+  assert.ok(Math.abs(await height()-30)<1e-6);
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
   assert.deepEqual(await page.evaluate(()=>HZ.pinnedTarget.point),target);
-  await page.waitForTimeout(200);assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
+  await page.waitForTimeout(200);assert.ok(Math.abs(await height()-30)<1e-6);
   const hills=await page.evaluate(()=>{
     const g=terrainView.game,r=g.view.model.radius,points=[];
     for(let x=-.8;x<=.8;x+=.2)for(let z=-.8;z<=.8;z+=.2)
@@ -1402,7 +1402,7 @@ test('Fly to Target and Start preserve initial height above terrain after climbi
     assert.ok(result.started && result.finished && result.flying);
     assert.ok(result.clearance>=-1e-6,'flight clears terrain');
     assert.ok(result.horizontalError<.001);
-    assert.ok(Math.abs(result.eyeHeight-initial.eyeHeight)<1e-6);
+    assert.ok(Math.abs(result.eyeHeight-30)<1e-6);
   }
   await page.evaluate(()=>{const g=terrainView.game;g.keys.add('e');g.step(.1);g.keys.clear();});
   await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
@@ -1618,7 +1618,7 @@ test('Walk search handles empty results, network failures, sky aiming and late r
   await close(page);
 });
 
-test('every Walk entry starts airborne and both Fly to actions restore its terrain clearance',async()=>{
+test('Walk entry preserves camera height, Target arrives at 30 m, and Start restores clearance',async()=>{
   for(const [view,source,height] of [['2d','gps',30],['2d','coordinates',30],['3d','coordinates',30],['perspective','coordinates',1.6],['perspective','coordinates',120],['perspective','photo',1.6]]) {
     const page=await pageFor({width:390,height:844},true);
     if(source==='photo') {
@@ -1652,17 +1652,21 @@ test('every Walk entry starts airborne and both Fly to actions restore its terra
     await page.waitForFunction(()=>!document.getElementById('game-target').disabled);
     await page.locator('#game-target').click();
     const selected=await page.evaluate(()=>terrainPoint(terrainData,HZ.pinnedTarget.point));
-    // Explicitly land first so the destination must restore the initial height.
+    // Land first to exercise Target arrival independently of current height.
     await page.evaluate(()=>{
       const g=terrainView.game;g.position[1]=gameGround(g.view,g.position[0],g.position[2])/g.view.model.radius;
       g.flying=false;g.velocityY=0;
     });
     await page.locator('#game-goto-target').click();await page.waitForFunction(()=>!terrainView.game.flight);
     const arrival=await state();assert.equal(arrival.flying,true);
-    assert.ok(Math.abs(arrival.height-start.height)<1e-6,'Target restores starting clearance after landing');
+    assert.ok(Math.abs(arrival.height-30)<1e-6,'Target restores normal Walk eye height after landing');
     assert.ok(Math.hypot(arrival.position[0]-selected[0],arrival.position[2]-selected[2])<1e-9);
     await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
-    const returned=await state();assert.equal(returned.flying,true);assert.deepEqual(returned.position,start.position);
+    const returned=await state();assert.equal(returned.flying,true);
+    if (view==='3d') {
+      const point=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
+      assert.ok(Math.abs(point.lat-48.8584)<1e-8 && Math.abs(point.lon-2.2945)<1e-8);
+    } else assert.deepEqual(returned.position,start.position);
     await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'return holds altitude');
     if(view==='2d')await page.screenshot({path:'/tmp/horizon-airborne-map-start.png'});
     await close(page);
@@ -1816,6 +1820,13 @@ test('Walk loads each outside edge around the geographic eye and restores the ob
     assert.notEqual(result.before.lat,result.after.lat);
     assert.ok(result.dist>1000,'marked coordinates measure from original observer');
     result.aim.forEach((v,i)=>assert.ok(Math.abs(v-expected.forward[i])<1e-9));
+    if (elevated) {
+      await page.locator('#game-respawn').click();
+      await page.waitForFunction(()=>terrainView.model===originalTerrain && !terrainView.game.flight);
+      const landed=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
+      assert.ok(Math.abs(landed.lat-48.8584)<1e-8 && Math.abs(landed.lon-2.2945)<1e-8);
+      assert.equal(await page.evaluate(()=>terrainView.game.relativeToStart().distance),0);
+    }
     await page.locator('#game-exit').click();
     assert.deepEqual(await page.evaluate(()=>terrainView.captureView()),expected.view);
     assert.ok(await page.evaluate(()=>mapView==='3d' && terrainView.model===originalTerrain &&
@@ -1836,4 +1847,72 @@ test('Walk loads each outside edge around the geographic eye and restores the ob
   assert.match(await page.locator('#walk-patch-status').innerText(),/80°/);
   assert.equal(await page.evaluate(()=>window.patchWorker),null);
   await close(page);
+});
+
+test('Terrain Walk keeps the active Search marker as Start across new searches', async()=>{
+  const page=await pageFor({width:1200,height:800},true);
+  await mapCoordinates(page);
+  for(const [lat,lon] of [[48.8584,2.2945],[48.86,2.30]]) {
+    if(lat===48.86) {
+      await page.locator('#coordinate-pick').click();
+      await page.locator('#coordinate-input').fill(lat+', '+lon);
+      await page.locator('#coordinate-input').press('Enter');
+      await page.waitForFunction(()=>S.pos.coords.latitude===48.86 && !HZ.loading);
+    }
+    await page.locator('[data-v="3d"]').click();
+    await page.evaluate(()=>{
+      terrainView.resetCamera();terrainView.zoom(.05);terrainView.orbit(.7,-.2);terrainView.pan(-80,55);
+      HZ.selAz=42;HZ.pinnedTarget={bearing:42,point:{lat:48.861,lon:2.291,elev:65,dist:200,ang:1}};
+    });
+    await page.locator('#map-game').click();
+    assert.ok(await page.evaluate(()=>terrainView.game.relativeToStart().distance>50));
+    await page.locator('#game-respawn').click();
+    await page.waitForFunction(()=>!terrainView.game.flight);
+    const arrival=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
+    assert.ok(Math.abs(arrival.lat-lat)<1e-8 && Math.abs(arrival.lon-lon)<1e-8);
+    assert.equal(await page.evaluate(()=>HZ.pinnedTarget.bearing),42);
+    await page.locator('#game-exit').click();
+  }
+  await page.locator('#use-gps').click();
+  await page.waitForFunction(()=>window.__gpsRequests>0);
+  await page.evaluate(()=>window.__gpsSuccess({coords:{latitude:48.859,longitude:2.295,accuracy:5},timestamp:Date.now()}));
+  await page.waitForFunction(()=>S.locationSource==='gps' && terrainData && !HZ.loading);
+  await page.locator('[data-v="3d"]').click();
+  await page.locator('#map-game').click();
+  assert.equal(await page.evaluate(()=>terrainView.game.startMarker),null);
+  await close(page);
+});
+
+test('top-down Terrain enters Walk over the same footprint before the first orbit', async()=>{
+  for (const viewport of [{width:390,height:844},{width:1440,height:900}]) {
+    const page=await pageFor(viewport,true);await mapCoordinates(page);
+    for (const moved of [false,true]) {
+      await page.locator('[data-v="3d"]').click();
+      const frame=await page.evaluate(moved=>{
+        const v=terrainView;
+        if (moved) {v.zoom(.45);v.pan(-45,30);}
+        const c=terrainOrbitCamera(v),h=c.halfHeight*v.model.radius;
+        return {ortho:v.orthographic,x:v.focus[0],z:v.focus[2],h,w:h*v.canvas.clientWidth/v.canvas.clientHeight};
+      },moved);
+      assert.equal(frame.ortho,true);
+      await page.locator('#map-game').click();
+      const pose=await page.evaluate(()=>{
+        const v=terrainView,g=v.game,r=v.model.radius;
+        g.step(.016);g.lookBy(3,0);
+        const c=g.aimCamera(),ground=gameGround(v,c.eye[0],c.eye[2]);
+        const h=(c.eye[1]*r-ground)/c.focal;
+        return {x:c.eye[0],z:c.eye[2],h,w:h*v.canvas.clientWidth/v.canvas.clientHeight,
+          forward:c.forward,up:c.up,right:c.right,ortho:c.halfHeight};
+      });
+      assert.equal(pose.ortho,0);
+      assert.ok(Math.hypot(pose.x-frame.x,pose.z-frame.z)<1e-10);
+      assert.ok(Math.hypot(pose.forward[0],pose.forward[2])<1e-9 && pose.forward[1]<-.999999);
+      assert.ok(Math.abs(Math.hypot(...pose.up)-1)<1e-9 && Math.abs(Math.hypot(...pose.right)-1)<1e-9);
+      assert.ok(pose.w/frame.w>=.99999 && pose.h/frame.h>=.99999);
+      assert.ok(Math.abs(Math.min(pose.w/frame.w,pose.h/frame.h)-1)<1e-5);
+      await page.locator('#game-exit').click();
+      await page.locator('[data-v="2d"]').click();
+    }
+    await close(page);
+  }
 });

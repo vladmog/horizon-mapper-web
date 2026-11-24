@@ -407,14 +407,14 @@ class TerrainView {
     this.detailLayers = 0;
     this.textureDirty = this.detailDirty = true;
   }
-  setModel(model) {
+  setModel(model, {keepWalk=false}={}) {
     if (model && (model.n !== 257 || model.heights?.length !== model.n * model.n || !(model.radius > 0)
       || model.heights.some(h => !Number.isFinite(h)))) throw new Error('Invalid 3D terrain data.');
     if (model?.patches && (!Array.isArray(model.patches) || model.patches.length > 8 ||
       model.patches.some((patch,i) => patch.radius !== model.radius / 2**(i+1) ||
         patch.heights?.length !== model.n*model.n || patch.heights.some(h=>!Number.isFinite(h)))))
       throw new Error('Invalid 3D terrain detail data.');
-    this.game?.stop();
+    if (!keepWalk) this.game?.stop();
     this.cancelGestures(); this.model = model; this.lastTarget = ''; this.detailPlan = null;
     this.orbitSource = this.orbitTarget = null;
     this.imagery.releaseView('base');
