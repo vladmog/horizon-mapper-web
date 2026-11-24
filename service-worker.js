@@ -1,6 +1,7 @@
 "use strict";
 
-const CACHE = "horizon-mapper-workspace-v58";
+importScripts("./pwa.js");
+const CACHE = "horizon-mapper-workspace-v" + HORIZON_RELEASE;
 const SHELL = [
   "./", "./index.html", "./workspace.css", "./welcome-ridgeline.webp", "./workspace.js", "./manifest.webmanifest", "./privacy.html",
   "./browser-profile.js", "./terrain-worker.js", "./horizon-core.js", "./pwa.js",

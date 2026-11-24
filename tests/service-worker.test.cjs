@@ -14,7 +14,7 @@ test('service worker installs coherent releases, keeps them offline, and rejects
     try {
       let body;
       if(name==='index.html')body=`<!doctype html><title>release-${filesVersion}</title>`;
-      else if(name==='service-worker.js')body=fs.readFileSync(path.join(root,name),'utf8').replace(/horizon-mapper-workspace-v\d+/,`horizon-mapper-test-${workerVersion}`);
+      else if(name==='pwa.js')body=fs.readFileSync(path.join(root,name),'utf8').replace(/HORIZON_RELEASE = \d+/,`HORIZON_RELEASE = ${workerVersion}`);
       else {
         body=fs.readFileSync(path.join(root,name));
         if(['workspace.js','workspace.css'].includes(name))body=Buffer.concat([body,Buffer.from(`\n/* release-${filesVersion} */`)]);
@@ -51,7 +51,7 @@ test('service worker installs coherent releases, keeps them offline, and rejects
       await (await navigator.serviceWorker.getRegistration()).update();await changed;
     });
     assert.deepEqual(await shell(),['2','2','2']);
-    await page.waitForFunction(async()=>!(await caches.keys()).includes('horizon-mapper-test-1'),null,{timeout:5000});
+    await page.waitForFunction(async()=>!(await caches.keys()).includes('horizon-mapper-workspace-v1'),null,{timeout:5000});
     const keys=await page.evaluate(()=>caches.keys());assert.ok(keys.includes('another-app-cache'));
     // A failed file download leaves the previous complete release active.
     workerVersion=3;filesVersion=3;failScript=true;

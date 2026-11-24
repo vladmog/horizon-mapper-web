@@ -1,6 +1,13 @@
 "use strict";
 
-if ("serviceWorker" in navigator) {
+// Shared by the loaded Settings page and the service worker that installs its shell.
+const HORIZON_RELEASE = 59;
+
+if (typeof document !== "undefined") {
+  document.getElementById("settings-version").textContent = "Version " + HORIZON_RELEASE;
+}
+
+if (typeof window !== "undefined" && "serviceWorker" in navigator) {
   // On a first visit the hero loads before the worker controls the page.
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     const image = document.querySelector(".welcome-landscape img");
