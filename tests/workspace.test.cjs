@@ -122,6 +122,18 @@ async function noOverflow(page) {
 async function openSettings(page) {
   await page.locator(page.viewportSize().width<=900?'[data-mobile-panel="settings"]':'[data-panel="settings"]').click();
 }
+async function assertDefaultStart(page) {
+  const state=await page.evaluate(()=>{
+    const g=terrainView.game, model=g.view.model;
+    g.step(1/60);
+    const eye=g.aimCamera().eye, point=walkGeographicPoint(model,eye);
+    return {point,lat:S.pos.coords.latitude,lon:S.pos.coords.longitude,
+      clearance:point.elev-gameGround(g.view,eye[0],eye[2]),flying:g.flying};
+  });
+  assert.ok(Math.abs(state.point.lat-state.lat)<1e-8 && Math.abs(state.point.lon-state.lon)<1e-8);
+  assert.ok(Math.abs(state.clearance-30)<1e-6);
+  assert.equal(state.flying,true);
+}
 async function mapCoordinates(page) {
   await page.locator("#gate-coordinates").click();
   await page.locator("#coordinate-input").fill("48.8584, 2.2945");
@@ -626,7 +638,7 @@ test("first-person Walk exposes every action and both joysticks at phone sizes",
   assert.notDeepEqual(await page.evaluate(()=>terrainView.game.position),from);
   await page.locator('#game-respawn').click();
   await page.waitForFunction(()=>!terrainView.game.flight);
-  assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
+  await assertDefaultStart(page);
   await page.evaluate(()=>{terrainView.game.tilt=-1.2;terrainView.dirty=true;});
   await page.waitForFunction(()=>document.getElementById('game-target').disabled);
   assert.match(await page.locator('#game-laser-status').innerText(),/No terrain hit/);
@@ -1311,7 +1323,7 @@ test('Viewpoint enters Walk airborne, preserving higher cameras and aim without 
       const game=terrainView.game;game.position[0]+=10/terrainData.radius;
       game.reset();for(let i=0;i<1000 && game.flight;i++)game.advanceFlight(1/120);
     });
-    assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
+    await assertDefaultStart(page);
     assert.equal(await page.evaluate(()=>terrainView.game.flying),after.flying);
     await page.locator('#game-exit').click();
     await page.waitForFunction(()=>mapView==='perspective');
@@ -1356,7 +1368,7 @@ test('first-person gun surfaces occlude correctly regardless of triangle submiss
   await close(page);
 });
 
-test('Fly to Target arrives at default height across hills and Start restores initial clearance',async()=>{
+test('Fly to Target arrives at default height across hills and Start returns to the source at default height',async()=>{
   const page=await pageFor({width:390,height:844},true);await mapCoordinates(page);
   await page.locator('[data-v="perspective"]').click();await page.locator('#map-game').click();
   await page.waitForFunction(()=>terrainView.game?.active && !document.getElementById('game-target').disabled);
@@ -1406,8 +1418,8 @@ test('Fly to Target arrives at default height across hills and Start restores in
   }
   await page.evaluate(()=>{const g=terrainView.game;g.keys.add('e');g.step(.1);g.keys.clear();});
   await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
-  assert.ok(Math.abs(await height()-initial.eyeHeight)<1e-6);
-  assert.deepEqual(await page.evaluate(()=>terrainView.game.position),await page.evaluate(()=>terrainView.game.spawn));
+  assert.ok(Math.abs(await height()-30)<1e-6);
+  await assertDefaultStart(page);
   assert.equal(await page.evaluate(()=>terrainView.game.flying),true);
   // A fresh session started from Map must also start and arrive airborne.
   await page.locator('#game-exit').click();await page.locator('[data-v="2d"]').click();await page.locator('#map-game').click();
@@ -1618,7 +1630,7 @@ test('Walk search handles empty results, network failures, sky aiming and late r
   await close(page);
 });
 
-test('Walk entry preserves camera height, Target arrives at 30 m, and Start restores clearance',async()=>{
+test('Walk entry preserves camera height, Target arrives at 30 m, and Start also arrives at 30 m',async()=>{
   for(const [view,source,height] of [['2d','gps',30],['2d','coordinates',30],['3d','coordinates',30],['perspective','coordinates',1.6],['perspective','coordinates',120],['perspective','photo',1.6]]) {
     const page=await pageFor({width:390,height:844},true);
     if(source==='photo') {
@@ -1663,11 +1675,8 @@ test('Walk entry preserves camera height, Target arrives at 30 m, and Start rest
     assert.ok(Math.hypot(arrival.position[0]-selected[0],arrival.position[2]-selected[2])<1e-9);
     await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
     const returned=await state();assert.equal(returned.flying,true);
-    if (view==='3d') {
-      const point=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
-      assert.ok(Math.abs(point.lat-48.8584)<1e-8 && Math.abs(point.lon-2.2945)<1e-8);
-    } else assert.deepEqual(returned.position,start.position);
-    await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-start.height)<1e-6,'return holds altitude');
+    await assertDefaultStart(page);
+    await page.waitForTimeout(150);assert.ok(Math.abs((await state()).height-30)<1e-6,'return holds default height');
     if(view==='2d')await page.screenshot({path:'/tmp/horizon-airborne-map-start.png'});
     await close(page);
   }
@@ -1826,6 +1835,7 @@ test('Walk loads each outside edge around the geographic eye and restores the ob
       const landed=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
       assert.ok(Math.abs(landed.lat-48.8584)<1e-8 && Math.abs(landed.lon-2.2945)<1e-8);
       assert.equal(await page.evaluate(()=>terrainView.game.relativeToStart().distance),0);
+      await assertDefaultStart(page);
     }
     await page.locator('#game-exit').click();
     assert.deepEqual(await page.evaluate(()=>terrainView.captureView()),expected.view);
@@ -1871,6 +1881,7 @@ test('Terrain Walk keeps the active Search marker as Start across new searches',
     const arrival=await page.evaluate(()=>walkGeographicPoint(terrainView.model,terrainView.game.position));
     assert.ok(Math.abs(arrival.lat-lat)<1e-8 && Math.abs(arrival.lon-lon)<1e-8);
     assert.equal(await page.evaluate(()=>HZ.pinnedTarget.bearing),42);
+    await assertDefaultStart(page);
     await page.locator('#game-exit').click();
   }
   await page.locator('#use-gps').click();
@@ -1879,7 +1890,9 @@ test('Terrain Walk keeps the active Search marker as Start across new searches',
   await page.waitForFunction(()=>S.locationSource==='gps' && terrainData && !HZ.loading);
   await page.locator('[data-v="3d"]').click();
   await page.locator('#map-game').click();
-  assert.equal(await page.evaluate(()=>terrainView.game.startMarker),null);
+  assert.equal(await page.evaluate(()=>terrainView.game.startMarker.lat),48.859);
+  await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
+  await assertDefaultStart(page);
   await close(page);
 });
 
@@ -1910,9 +1923,35 @@ test('top-down Terrain enters Walk over the same footprint before the first orbi
       assert.ok(Math.abs(Math.hypot(...pose.up)-1)<1e-9 && Math.abs(Math.hypot(...pose.right)-1)<1e-9);
       assert.ok(pose.w/frame.w>=.99999 && pose.h/frame.h>=.99999);
       assert.ok(Math.abs(Math.min(pose.w/frame.w,pose.h/frame.h)-1)<1e-5);
+      await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
+      await assertDefaultStart(page);
       await page.locator('#game-exit').click();
       await page.locator('[data-v="2d"]').click();
     }
     await close(page);
   }
+});
+
+test('a photo selected after Search becomes Start for an elevated, displaced Terrain walk',async()=>{
+  const page=await pageFor({width:1200,height:800},true);
+  await mapCoordinates(page);
+  const png=await page.evaluate(()=>{
+    window.exifr.parse=async()=>({GPSLatitude:48.863,GPSLongitude:2.30,GPSLatitudeRef:'N',GPSLongitudeRef:'E',latitude:48.863,longitude:2.30});
+    const c=document.createElement('canvas');return c.toDataURL().split(',')[1];
+  });
+  await page.locator('#photo-file').setInputFiles({name:'source-marker.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await page.waitForFunction(()=>S.locationSource==='photo' && mapView==='perspective' && !HZ.loading);
+  await page.locator('[data-v="3d"]').click();
+  await page.waitForFunction(()=>mapView==='3d' && terrainView?.model && !HZ.loading);
+  await page.evaluate(()=>{
+    const v=terrainView;v.resetCamera();v.zoom(.1);v.orbit(.4,-.25);v.pan(-60,40);
+    v.focus[1]+=7000/v.model.radius;
+  });
+  await page.locator('#map-game').click();
+  assert.ok(await page.evaluate(()=>terrainView.game.aimCamera().eye[1]*terrainData.radius>7000));
+  await page.locator('#game-respawn').click();await page.waitForFunction(()=>!terrainView.game.flight);
+  await assertDefaultStart(page);
+  assert.equal(await page.evaluate(()=>S.pos.coords.latitude),48.863);
+  assert.equal(await page.evaluate(()=>S.photoName),'source-marker.png');
+  await close(page);
 });

@@ -1722,12 +1722,12 @@ function setMapView(view, patch = null) {
       if (view === "3d") terrainView.photoView = false;
       if (view === 'game' && changingMode) {
         const source={lat:S.pos.coords.latitude,lon:S.pos.coords.longitude};
-        let startMarker=null;
-        if (mapView === "3d" && S.locationSource === "coordinates") {
-          const point=terrainPoint(terrainData,{...source,elev:0});
-          const ground=gameGround(terrainView,point[0],point[2]);
-          if (ground!==null) startMarker={...source,elev:ground};
-        }
+        // Snapshot the active source before a temporary Walk mesh replaces it.
+        // A live GPS fix can move outside its last mapped observer terrain.
+        const point=terrainPoint(terrainData,{...source,elev:0});
+        const ground=gameGround(terrainView,point[0],point[2]);
+        const startMarker=ground!==null ? {...source,elev:ground}
+          : walkGeographicPoint(terrainData,[0,gameGround(terrainView,0,0)/terrainData.radius,0]);
         if (patch) terrainView.setModel(patch.model);
         terrainView.game ||= new TerrainGame(terrainView);
         terrainView.game.observerModel = terrainData;

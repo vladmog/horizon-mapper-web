@@ -90,6 +90,7 @@ function gameFlightPlan(view, from, to) {
 
 const WALK_DEFAULT_EYE_CLEARANCE = 30;
 const WALK_EYE_OFFSET = 1.65;
+const WALK_DEFAULT_FEET_CLEARANCE = WALK_DEFAULT_EYE_CLEARANCE-WALK_EYE_OFFSET;
 const WALK_MAX_HEIGHT = 5000; // metres from terrain to avatar feet
 
 function walkFocalLength(width,height) {
@@ -132,9 +133,9 @@ class TerrainGame {
     }
     if(camera)this.thirdPerson=false;
     this.flying=this.position[1]*radius>ground+.05;
-    this.spawn=[...this.position];this.spawnFlying=this.flying;
-    this.spawnClearance=Math.max(0,this.position[1]*radius-ground);this.heading=this.yaw;
-    this.startMarker=startMarker && {...startMarker,elev:startMarker.elev+this.spawnClearance};
+    this.spawn=[...this.position];this.heading=this.yaw;
+    const marker=startMarker || {...position,elev:ground};
+    this.startMarker={...marker,elev:marker.elev+WALK_DEFAULT_FEET_CLEARANCE};
     this.phase=0;this.speed=0;this.velocityY=0;
     window.getSelection?.()?.removeAllRanges();
     this.flight=null;this.targetPlaced=false;this.active=true;this.lastTime=null;this.clearInput();this.view.dirty=true;
@@ -151,7 +152,7 @@ class TerrainGame {
   }
   reset() {
     if (!this.startMarker) return this.beginFlight({position:[...this.spawn],flying:this.spawnFlying ?? false},'start');
-    let destination=this.targetDestination(this.startMarker,this.spawnClearance);
+    let destination=this.targetDestination(this.startMarker);
     if (!destination && this.observerModel && this.view.model!==this.observerModel) {
       // The source mesh stays resident throughout a temporary Walk. Cross the
       // unloaded gap immediately, then animate the covered part of the route.
@@ -171,19 +172,19 @@ class TerrainGame {
       const floor=gameGround(this.view,entry[0],entry[2]);
       entry[1]=Math.max(entry[1],floor/observer.radius);
       this.position=entry;this.flight=null;this.clearInput();this.lastTime=null;
-      destination=this.targetDestination(this.startMarker,this.spawnClearance);
+      destination=this.targetDestination(this.startMarker);
     }
     if (!destination) return false;
     this.startMarker.elev=destination.position[1]*this.view.model.radius;
     return this.beginFlight(destination,'start');
   }
-  targetDestination(point, clearance=WALK_DEFAULT_EYE_CLEARANCE-WALK_EYE_OFFSET) {
+  targetDestination(point) {
     if(!point || ![point.lat,point.lon,point.elev].every(Number.isFinite))return null;
     const position=terrainPoint(this.view.model,point);
     const ground=gameGround(this.view,position[0],position[2]);
     if(ground===null)return null;
-    position[1]=(ground+clearance)/this.view.model.radius;
-    return {position,flying:clearance>.05};
+    position[1]=(ground+WALK_DEFAULT_FEET_CLEARANCE)/this.view.model.radius;
+    return {position,flying:true};
   }
   goToTarget(point) {
     const destination=this.targetDestination(point);

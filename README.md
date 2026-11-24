@@ -70,9 +70,8 @@ If the camera is outside the loaded mesh, Walk loads a temporary terrain square
 centered there (up to 6 km from center to edge). Cancel keeps the Terrain view.
 Terrain entry preserves altitude until the avatar’s feet meet the ground and
 allows flight above the usual ceiling. Exiting the temporary area restores the
-original model and Terrain view. Movement stays inside the session’s loaded square. For a searched location,
-entering Walk from Terrain keeps the camera spawn separate from Start. Fly to
-Start returns to the search marker at the initial clearance above ground. If
+original model and Terrain view. Movement stays inside the session’s loaded square. Fly to Start returns to the
+active source (Search, photo, or GPS) with the avatar’s eyes 30 m above local ground. If
 the marker is outside the temporary square, Walk switches back to the original
 terrain and flies the remaining covered distance.
 
